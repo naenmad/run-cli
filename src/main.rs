@@ -7,13 +7,14 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, FuzzySelect, Input, Select};
 
 mod commands;
 mod completion;
 mod config;
 mod ui;
+
+use ui::RunTheme as ColorfulTheme;
 
 #[derive(Parser)]
 #[command(name = "run")]
@@ -342,6 +343,17 @@ enum Commands {
         shell: String,
     },
 
+    /// Manage run-cli configuration, colors, default IDE, and auto-clear
+    #[command(name = "config", alias = "cfg")]
+    Config {
+        /// Subaction: get, set, path, edit, or reset
+        action: Option<String>,
+        /// Configuration key (primary_color, default_ide, auto_clear, custom_hubs)
+        key: Option<String>,
+        /// Configuration value to set
+        val: Option<String>,
+    },
+
     /// Display complete command reference and usage tutorial
     #[command(name = "help", alias = "doc", alias = "guide")]
     Help {
@@ -617,6 +629,12 @@ const ALL_COMMANDS: &[CommandInfo] = &[
         description: "Generate native shell tab-completion (zsh, bash, fish)",
     },
     CommandInfo {
+        name: "config",
+        alias_3: "cfg",
+        aliases: &["cfg"],
+        description: "Manage CLI settings, primary color, editor & auto-clear",
+    },
+    CommandInfo {
         name: "help",
         alias_3: "doc",
         aliases: &["doc", "guide"],
@@ -820,15 +838,16 @@ fn resolve_command_args_internal(
 }
 
 fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
+    ui::maybe_auto_clear();
     ui::print_banner();
     ui::render_breadcrumbs(&["run", "Launcher Dashboard"]);
 
     let categories = [
-        "🛠️   Developer & Workspace  (project, dev, build, docker, secret...)",
+        "🛠️   Developer & Workspace  (project, dev, build, docker, config...)",
         "📂  Filesystem & Navigation (go, list, make, memo, read, find...)",
         "⚙️   System & Monitoring     (process, kill, disk, whoami, time...)",
         "🌐  Network & Utilities     (port, fetch, speedtest, completion...)",
-        "🔍  Search All 40 Commands... (search as you type)",
+        "🔍  Search All 41 Commands... (search as you type)",
     ];
     let cancel_btn = cancel_option();
     let mut dashboard_options: Vec<String> = categories.iter().map(|s| s.to_string()).collect();
@@ -853,7 +872,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .filter(|c| {
                 [
                     "project", "dev", "build", "test", "clean", "sync", "network", "share",
-                    "bench", "docker", "secret",
+                    "bench", "docker", "secret", "config",
                 ]
                 .contains(&c.name)
             })
@@ -1003,6 +1022,9 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
             commands::handle_memo(theme, action.as_deref(), arg1.as_deref(), arg2.as_deref())
         }
         Commands::Completion { shell } => completion::generate_completion(&shell),
+        Commands::Config { action, key, val } => {
+            commands::handle_config(theme, action.as_deref(), key.as_deref(), val.as_deref())
+        }
         Commands::Init => handle_init(),
         Commands::Help { command } => handle_help(command.as_deref()),
     }
@@ -2514,31 +2536,12 @@ fn handle_build() -> Result<()> {
 }
 
 fn electric_blue(text: &str) -> colored::ColoredString {
-    text.truecolor(0, 162, 255)
+    ui::primary_colored(text)
 }
 
-/// Creates a customized dialoguer theme replacing default cyan with high-contrast electric blue.
+/// Creates a customized dialoguer theme respecting user's primary color and red Cancel.
 fn custom_theme() -> ColorfulTheme {
-    let mut theme = ColorfulTheme::default();
-    let electric_style = dialoguer::console::Style::new()
-        .for_stderr()
-        .color256(39)
-        .bold();
-    let electric_symbol = dialoguer::console::style("❯".to_string())
-        .for_stderr()
-        .color256(39)
-        .bold();
-
-    theme.prompt_style = dialoguer::console::Style::new().for_stderr().bold();
-    theme.prompt_prefix = dialoguer::console::style("?".to_string())
-        .for_stderr()
-        .color256(39)
-        .bold();
-    theme.values_style = electric_style.clone();
-    theme.active_item_style = electric_style;
-    theme.active_item_prefix = electric_symbol.clone();
-    theme.picked_item_prefix = electric_symbol;
-    theme
+    ui::custom_theme()
 }
 
 /// Displays beautifully formatted terminal help reference and command details.
@@ -2690,6 +2693,11 @@ fn print_main_help() {
         "completion",
         "cmp",
         "Generate native shell completion (zsh, bash, fish)",
+    );
+    print_cmd_summary(
+        "config",
+        "cfg",
+        "Manage CLI settings, primary color & auto-clear",
     );
     print_cmd_summary("help", "doc (guide)", "Display reference or detailed guide");
     println!();
@@ -3119,6 +3127,24 @@ fn print_command_detail(cmd: &str) {
             println!("  run cmp zsh               Alias\n");
             println!("{}", electric_blue("SETUP:").bold());
             println!("  eval \"$(run init)\" automatically loads completion into your shell!");
+        }
+        "config" | "cfg" => {
+            println!("{} config (alias: cfg)", electric_blue("COMMAND:").bold());
+            println!(
+                "Manage run-cli settings, primary theme colors, default editor & auto-clear.\n"
+            );
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run config                Open interactive settings dashboard");
+            println!("  run cfg                   Alias");
+            println!(
+                "  run cfg get <key>         Get config value (primary_color, default_ide, auto_clear)"
+            );
+            println!(
+                "  run cfg set <key> <val>   Set config value directly (e.g. run cfg set primary_color '#ff007f')"
+            );
+            println!("  run cfg path              Print path to ~/.config/run/config.toml");
+            println!("  run cfg edit              Open config file in default editor");
+            println!("  run cfg reset             Reset configuration to factory defaults");
         }
         "open" | "opn" => {
             println!("{} open (alias: opn)", electric_blue("COMMAND:").bold());
@@ -3759,6 +3785,32 @@ mod tests {
                 command: Some(Commands::Completion { ref shell })
             }) if shell == "fish"
         ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "config"]),
+            Ok(Cli {
+                command: Some(Commands::Config {
+                    action: None,
+                    key: None,
+                    val: None
+                })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "cfg", "set", "primary_color", "#ff007f"]),
+            Ok(Cli {
+                command: Some(Commands::Config { ref action, ref key, ref val })
+            }) if action.as_deref() == Some("set") && key.as_deref() == Some("primary_color") && val.as_deref() == Some("#ff007f")
+        ));
+    }
+
+    #[test]
+    fn test_color_parsing() {
+        assert_eq!(config::parse_color("#ff007f"), (255, 0, 127));
+        assert_eq!(config::parse_color("violet"), (139, 92, 246));
+        assert_eq!(config::parse_color("emerald"), (16, 185, 129));
+        assert_eq!(config::parse_color("electric-blue"), (0, 162, 255));
     }
 
     #[test]

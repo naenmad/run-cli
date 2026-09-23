@@ -7,7 +7,7 @@ class Run < Formula
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/naenmad/run-cli/releases/download/v0.3.0/run-macos-aarch64.tar.gz"
-      sha256 "db37798626600440cf21f8c9bdedd7f3631887f278658f8990da9f7d1f9b996b"
+      sha256 "2f3b425d3fcda9d0186ab96a15d6718898193cee2f72bdc48fba6b8be6d9ef28"
     end
   end
 

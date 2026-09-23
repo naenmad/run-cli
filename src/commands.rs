@@ -5,11 +5,11 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 use colored::Colorize;
-use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, FuzzySelect, Input, Select};
 use serde::{Deserialize, Serialize};
 
-use crate::ui;
+use crate::config;
+use crate::ui::{self, RunTheme as ColorfulTheme};
 
 fn electric_blue(text: &str) -> colored::ColoredString {
     ui::electric_blue(text)
@@ -2484,6 +2484,360 @@ pub fn handle_memo(
                     .green()
                     .bold()
             );
+        }
+    }
+
+    Ok(())
+}
+
+/// config (alias: cfg) - Manage CLI settings, colors, editor, and auto-clear
+pub fn handle_config(
+    theme: &ColorfulTheme,
+    action: Option<&str>,
+    key: Option<&str>,
+    val: Option<&str>,
+) -> Result<()> {
+    match action {
+        Some("get") => {
+            let key_name =
+                key.context("missing configuration key (e.g. 'run cfg get primary_color')")?;
+            let cfg = config::load_config();
+            match key_name.to_lowercase().as_str() {
+                "primary_color" | "color" => println!(
+                    "{}",
+                    cfg.primary_color.unwrap_or_else(|| "electric-blue".into())
+                ),
+                "auto_clear" | "clear" => println!("{}", cfg.auto_clear.unwrap_or(false)),
+                "default_ide" | "ide" => {
+                    println!("{}", cfg.default_ide.unwrap_or_else(|| "ask".into()))
+                }
+                "custom_hubs" | "hubs" => {
+                    for h in cfg.custom_hubs.unwrap_or_default() {
+                        println!("{}", h.display());
+                    }
+                }
+                other => bail!(
+                    "unknown configuration key '{other}'. Valid keys: primary_color, auto_clear, default_ide, custom_hubs"
+                ),
+            }
+        }
+        Some("set") => {
+            let key_name = key.context(
+                "missing configuration key (e.g. 'run cfg set primary_color \"#ff007f\"')",
+            )?;
+            let val_str =
+                val.context("missing value to set (e.g. 'run cfg set primary_color \"#ff007f\"')")?;
+            let mut cfg = config::load_config();
+            match key_name.to_lowercase().as_str() {
+                "primary_color" | "color" => {
+                    cfg.primary_color = Some(val_str.to_string());
+                    config::save_config(&cfg)?;
+                    println!("{} Set primary_color to '{}'", "✔".green().bold(), val_str);
+                }
+                "auto_clear" | "clear" => {
+                    let b =
+                        val_str == "true" || val_str == "1" || val_str == "yes" || val_str == "on";
+                    cfg.auto_clear = Some(b);
+                    config::save_config(&cfg)?;
+                    println!("{} Set auto_clear to {}", "✔".green().bold(), b);
+                }
+                "default_ide" | "ide" => {
+                    cfg.default_ide = Some(val_str.to_string());
+                    config::save_config(&cfg)?;
+                    println!("{} Set default_ide to '{}'", "✔".green().bold(), val_str);
+                }
+                "custom_hubs" | "hubs" => {
+                    let mut hubs = cfg.custom_hubs.unwrap_or_default();
+                    hubs.push(PathBuf::from(val_str));
+                    cfg.custom_hubs = Some(hubs);
+                    config::save_config(&cfg)?;
+                    println!("{} Added '{}' to custom_hubs", "✔".green().bold(), val_str);
+                }
+                other => bail!(
+                    "unknown configuration key '{other}'. Valid keys: primary_color, auto_clear, default_ide, custom_hubs"
+                ),
+            }
+        }
+        Some("path") => {
+            let path = config::config_path()?;
+            println!("{}", path.display());
+        }
+        Some("edit") => {
+            let path = config::config_path()?;
+            if !path.exists() {
+                let _ = config::load_config();
+            }
+            let _ = Command::new("open").arg(&path).status();
+            println!("Opened config file in system editor: {}", path.display());
+        }
+        Some("reset") => {
+            if Confirm::with_theme(theme)
+                .with_prompt("Reset configuration to factory defaults?")
+                .default(false)
+                .interact()?
+            {
+                let path = config::config_path()?;
+                if path.exists() {
+                    let _ = fs::remove_file(path);
+                }
+                let _ = config::load_config();
+                println!("{} Configuration reset to default.", "✔".green().bold());
+            } else {
+                println!("Cancelled.");
+            }
+        }
+        None | Some("interactive") | Some("menu") => {
+            manage_config_interactive(theme)?;
+        }
+        Some(other) => {
+            bail!("unknown config action '{other}'. Usage: run config [get|set|path|edit|reset]");
+        }
+    }
+    Ok(())
+}
+
+fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
+    ui::maybe_auto_clear();
+    ui::print_banner();
+    ui::render_breadcrumbs(&["run", "Configuration"]);
+
+    let cfg = config::load_config();
+    let primary = cfg
+        .primary_color
+        .clone()
+        .unwrap_or_else(|| "electric-blue".to_string());
+    let (r, g, b) = config::parse_color(&primary);
+    let swatch = format!("■ {}", primary)
+        .truecolor(r, g, b)
+        .bold()
+        .to_string();
+    let auto_clear_str = if cfg.auto_clear.unwrap_or(false) {
+        "Enabled 🟢".green().to_string()
+    } else {
+        "Disabled ⚪".dimmed().to_string()
+    };
+    let ide_str = cfg
+        .default_ide
+        .clone()
+        .unwrap_or_else(|| "ask (Prompt each time)".to_string());
+    let hubs_count = format!(
+        "{} directory hubs registered",
+        cfg.custom_hubs.as_ref().map(|h| h.len()).unwrap_or(0)
+    );
+    let config_file_path = config::config_path()
+        .map(|p| {
+            let s = p.to_string_lossy().to_string();
+            if let Ok(home) = std::env::var("HOME")
+                && s.starts_with(&home)
+            {
+                return format!("~{}", &s[home.len()..]);
+            }
+            s
+        })
+        .unwrap_or_default();
+
+    ui::print_card(
+        "Active Configuration",
+        &[
+            ("Primary Color", swatch),
+            ("Default Editor", ide_str),
+            ("Auto Clear", auto_clear_str),
+            ("Custom Hubs", hubs_count),
+            ("Config File", config_file_path),
+        ],
+    );
+
+    let cancel_btn = cancel_option();
+    let options = [
+        "🎨 1. Change Primary Color (Palette or Custom HEX)",
+        "🖥️  2. Set Default Project Editor / IDE",
+        "🧹 3. Toggle Auto-Clear Terminal Screen",
+        "📁 4. Add Custom Workspace Project Hub",
+        "📝 5. Open config.toml in Editor",
+        "🔄 6. Reset Configuration to Factory Defaults",
+        &cancel_btn,
+    ];
+
+    ui::print_key_hints();
+    let selection = Select::with_theme(theme)
+        .with_prompt("Select setting to configure")
+        .items(&options)
+        .default(0)
+        .interact()?;
+
+    match selection {
+        0 => {
+            // Color palette picker
+            let cancel_c = cancel_option();
+            let color_palette = [
+                "🔵 Electric Blue   (#00a2ff - Signature Default)",
+                "🟣 Neon Violet     (#8b5cf6)",
+                "🟢 Emerald Green   (#10b981)",
+                "🟠 Cyber Amber     (#f59e0b)",
+                "🔴 Hot Rose        (#f43f5e)",
+                "🐬 Aqua Cyan       (#06b6d4)",
+                "✨ Custom HEX Code (#RRGGBB)...",
+                &cancel_c,
+            ];
+
+            let col_sel = Select::with_theme(theme)
+                .with_prompt("Choose primary theme accent color")
+                .items(&color_palette)
+                .default(0)
+                .interact()?;
+
+            let mut new_cfg = config::load_config();
+            match col_sel {
+                0 => new_cfg.primary_color = Some("electric-blue".to_string()),
+                1 => new_cfg.primary_color = Some("violet".to_string()),
+                2 => new_cfg.primary_color = Some("emerald".to_string()),
+                3 => new_cfg.primary_color = Some("amber".to_string()),
+                4 => new_cfg.primary_color = Some("rose".to_string()),
+                5 => new_cfg.primary_color = Some("cyan".to_string()),
+                6 => {
+                    let hex_input: String = Input::with_theme(theme)
+                        .with_prompt("Enter HEX color code (e.g. #ff007f or #10b981)")
+                        .validate_with(|input: &String| -> Result<(), &str> {
+                            let clean = input.trim().trim_start_matches('#');
+                            if clean.len() == 6 && clean.chars().all(|c| c.is_ascii_hexdigit()) {
+                                Ok(())
+                            } else {
+                                Err("Please enter a valid 6-character hex code, e.g. #ff007f")
+                            }
+                        })
+                        .interact_text()?;
+                    let formatted = if hex_input.starts_with('#') {
+                        hex_input.to_lowercase()
+                    } else {
+                        format!("#{}", hex_input.to_lowercase())
+                    };
+                    new_cfg.primary_color = Some(formatted);
+                }
+                _ => {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+            }
+            config::save_config(&new_cfg)?;
+            let chosen = new_cfg.primary_color.unwrap();
+            let (r, g, b) = config::parse_color(&chosen);
+            println!(
+                "{}",
+                format!("Primary color updated to '{}'! 🎨", chosen)
+                    .truecolor(r, g, b)
+                    .bold()
+            );
+        }
+        1 => {
+            // Default IDE picker
+            let cancel_i = cancel_option();
+            let ide_choices = [
+                "Antigravity IDE (antigravity)",
+                "Cursor (cursor)",
+                "Visual Studio Code (vscode)",
+                "Xcode (xcode)",
+                "Switch Terminal Directory Only (terminal)",
+                "Ask every time (ask - default)",
+                &cancel_i,
+            ];
+
+            let ide_sel = Select::with_theme(theme)
+                .with_prompt("Select default project editor")
+                .items(&ide_choices)
+                .default(0)
+                .interact()?;
+
+            let mut new_cfg = config::load_config();
+            match ide_sel {
+                0 => new_cfg.default_ide = Some("antigravity".to_string()),
+                1 => new_cfg.default_ide = Some("cursor".to_string()),
+                2 => new_cfg.default_ide = Some("vscode".to_string()),
+                3 => new_cfg.default_ide = Some("xcode".to_string()),
+                4 => new_cfg.default_ide = Some("terminal".to_string()),
+                5 => new_cfg.default_ide = Some("ask".to_string()),
+                _ => {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+            }
+            config::save_config(&new_cfg)?;
+            println!(
+                "{}",
+                format!(
+                    "Default editor updated to '{}'! 🖥️",
+                    new_cfg.default_ide.unwrap()
+                )
+                .green()
+                .bold()
+            );
+        }
+        2 => {
+            // Toggle auto_clear
+            let mut new_cfg = config::load_config();
+            let current = new_cfg.auto_clear.unwrap_or(false);
+            new_cfg.auto_clear = Some(!current);
+            config::save_config(&new_cfg)?;
+            if !current {
+                println!("{}", "Auto-clear enabled! 🧹".green().bold());
+            } else {
+                println!("{}", "Auto-clear disabled. ⚪".yellow().bold());
+            }
+        }
+        3 => {
+            // Add custom hub
+            let hub_input: String = Input::with_theme(theme)
+                .with_prompt("Enter directory path to scan for projects (leave blank to cancel)")
+                .allow_empty(true)
+                .interact_text()?;
+
+            let trimmed = hub_input.trim();
+            if trimmed.is_empty() {
+                println!("Cancelled.");
+                return Ok(());
+            }
+
+            let mut new_cfg = config::load_config();
+            let mut hubs = new_cfg.custom_hubs.unwrap_or_default();
+            let p = PathBuf::from(trimmed);
+            if !hubs.contains(&p) {
+                hubs.push(p);
+                new_cfg.custom_hubs = Some(hubs);
+                config::save_config(&new_cfg)?;
+                println!(
+                    "{}",
+                    format!("Added '{}' to project scan hubs! 📁", trimmed)
+                        .green()
+                        .bold()
+                );
+            } else {
+                println!("Hub already registered in configuration.");
+            }
+        }
+        4 => {
+            let path = config::config_path()?;
+            if !path.exists() {
+                let _ = config::load_config();
+            }
+            let _ = Command::new("open").arg(&path).status();
+            println!("Opened config file in editor: {}", path.display());
+        }
+        5 if Confirm::with_theme(theme)
+            .with_prompt("Reset configuration to factory defaults?")
+            .default(false)
+            .interact()? =>
+        {
+            let path = config::config_path()?;
+            if path.exists() {
+                let _ = fs::remove_file(path);
+            }
+            let _ = config::load_config();
+            println!(
+                "{} Configuration reset to factory defaults.",
+                "✔".green().bold()
+            );
+        }
+        _ => {
+            println!("Cancelled.");
         }
     }
 

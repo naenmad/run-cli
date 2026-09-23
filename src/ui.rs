@@ -1,4 +1,4 @@
-use colored::{ColoredString, Colorize};
+use std::fmt;
 use std::io::{self, Write};
 use std::path::Path;
 use std::sync::Arc;
@@ -6,14 +6,220 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
-/// Returns text colored in signature electric blue (#00a2ff)
+use colored::{ColoredString, Colorize};
+use dialoguer::theme::{ColorfulTheme, Theme};
+
+/// Returns text colored in the active configured primary color (defaults to electric blue #00a2ff)
+pub fn primary_colored(text: &str) -> ColoredString {
+    crate::config::primary_colored(text)
+}
+
+/// Backward compatibility alias for primary_colored
 pub fn electric_blue(text: &str) -> ColoredString {
-    text.truecolor(0, 162, 255)
+    primary_colored(text)
 }
 
 /// Returns a standardized high-contrast red Cancel option for interactive menus
 pub fn cancel_option() -> String {
     format!("{}", "Cancel".bright_red().bold())
+}
+
+/// Clears terminal screen if user configured auto_clear = true
+pub fn maybe_auto_clear() {
+    let cfg = crate::config::load_config();
+    if cfg.auto_clear.unwrap_or(false) {
+        let _ = std::process::Command::new("clear").status();
+    }
+}
+
+/// Custom theme wrapping dialoguer::ColorfulTheme with active primary color
+/// and guaranteed persistent Bold Bright Red styling for "Cancel" items.
+pub struct RunTheme {
+    pub inner: ColorfulTheme,
+}
+
+impl Clone for RunTheme {
+    fn clone(&self) -> Self {
+        custom_theme()
+    }
+}
+
+impl Theme for RunTheme {
+    fn format_prompt(&self, f: &mut dyn fmt::Write, prompt: &str) -> fmt::Result {
+        self.inner.format_prompt(f, prompt)
+    }
+
+    fn format_error(&self, f: &mut dyn fmt::Write, err: &str) -> fmt::Result {
+        self.inner.format_error(f, err)
+    }
+
+    fn format_confirm_prompt(
+        &self,
+        f: &mut dyn fmt::Write,
+        prompt: &str,
+        default: Option<bool>,
+    ) -> fmt::Result {
+        self.inner.format_confirm_prompt(f, prompt, default)
+    }
+
+    fn format_confirm_prompt_selection(
+        &self,
+        f: &mut dyn fmt::Write,
+        prompt: &str,
+        selection: Option<bool>,
+    ) -> fmt::Result {
+        self.inner
+            .format_confirm_prompt_selection(f, prompt, selection)
+    }
+
+    fn format_input_prompt(
+        &self,
+        f: &mut dyn fmt::Write,
+        prompt: &str,
+        default: Option<&str>,
+    ) -> fmt::Result {
+        self.inner.format_input_prompt(f, prompt, default)
+    }
+
+    fn format_input_prompt_selection(
+        &self,
+        f: &mut dyn fmt::Write,
+        prompt: &str,
+        sel: &str,
+    ) -> fmt::Result {
+        self.inner.format_input_prompt_selection(f, prompt, sel)
+    }
+
+    fn format_password_prompt(&self, f: &mut dyn fmt::Write, prompt: &str) -> fmt::Result {
+        self.inner.format_password_prompt(f, prompt)
+    }
+
+    fn format_password_prompt_selection(
+        &self,
+        f: &mut dyn fmt::Write,
+        prompt: &str,
+    ) -> fmt::Result {
+        self.inner.format_password_prompt_selection(f, prompt)
+    }
+
+    fn format_select_prompt(&self, f: &mut dyn fmt::Write, prompt: &str) -> fmt::Result {
+        self.inner.format_select_prompt(f, prompt)
+    }
+
+    fn format_select_prompt_selection(
+        &self,
+        f: &mut dyn fmt::Write,
+        prompt: &str,
+        sel: &str,
+    ) -> fmt::Result {
+        self.inner.format_select_prompt_selection(f, prompt, sel)
+    }
+
+    fn format_select_prompt_item(
+        &self,
+        f: &mut dyn fmt::Write,
+        text: &str,
+        active: bool,
+    ) -> fmt::Result {
+        let is_cancel = text.contains("Cancel");
+        if active {
+            if is_cancel {
+                write!(
+                    f,
+                    "{} {}",
+                    "❯".bright_red().bold(),
+                    "Cancel".bright_red().bold()
+                )
+            } else {
+                self.inner.format_select_prompt_item(f, text, active)
+            }
+        } else if is_cancel {
+            write!(f, "  {}", "Cancel".bright_red().bold())
+        } else {
+            self.inner.format_select_prompt_item(f, text, active)
+        }
+    }
+
+    fn format_fuzzy_select_prompt(
+        &self,
+        f: &mut dyn fmt::Write,
+        prompt: &str,
+        search_term: &str,
+        cursor_pos: usize,
+    ) -> fmt::Result {
+        self.inner
+            .format_fuzzy_select_prompt(f, prompt, search_term, cursor_pos)
+    }
+
+    fn format_fuzzy_select_prompt_item(
+        &self,
+        f: &mut dyn fmt::Write,
+        text: &str,
+        active: bool,
+        highlight_matches: bool,
+        matcher: &fuzzy_matcher::skim::SkimMatcherV2,
+        search_term: &str,
+    ) -> fmt::Result {
+        let is_cancel = text.contains("Cancel");
+        if active {
+            if is_cancel {
+                write!(
+                    f,
+                    "{} {}",
+                    "❯".bright_red().bold(),
+                    "Cancel".bright_red().bold()
+                )
+            } else {
+                self.inner.format_fuzzy_select_prompt_item(
+                    f,
+                    text,
+                    active,
+                    highlight_matches,
+                    matcher,
+                    search_term,
+                )
+            }
+        } else if is_cancel {
+            write!(f, "  {}", "Cancel".bright_red().bold())
+        } else {
+            self.inner.format_fuzzy_select_prompt_item(
+                f,
+                text,
+                active,
+                highlight_matches,
+                matcher,
+                search_term,
+            )
+        }
+    }
+}
+
+/// Creates a customized dialoguer theme respecting user's configured primary color
+/// and guaranteeing persistent bold red styling for Cancel options.
+pub fn custom_theme() -> RunTheme {
+    let mut inner = ColorfulTheme::default();
+    let col256 = crate::config::get_primary_color256();
+
+    let primary_style = dialoguer::console::Style::new()
+        .for_stderr()
+        .color256(col256)
+        .bold();
+    let primary_symbol = dialoguer::console::style("❯".to_string())
+        .for_stderr()
+        .color256(col256)
+        .bold();
+
+    inner.prompt_style = dialoguer::console::Style::new().for_stderr().bold();
+    inner.prompt_prefix = dialoguer::console::style("?".to_string())
+        .for_stderr()
+        .color256(col256)
+        .bold();
+    inner.values_style = primary_style.clone();
+    inner.active_item_style = primary_style;
+    inner.active_item_prefix = primary_symbol.clone();
+    inner.picked_item_prefix = primary_symbol;
+
+    RunTheme { inner }
 }
 
 /// Calculate visible length of a string ignoring ANSI terminal escape codes
@@ -39,14 +245,14 @@ pub fn print_banner() {
     println!();
     let top = "╭────────────────────────────────────────────────────────────╮";
     let title = format!(
-        "│  {} {}  v0.2.0 • Developer Productivity Engine       │",
+        "│  {} {}  v0.3.0 • Developer Productivity Engine       │",
         "⚡".bold(),
-        electric_blue("run").bold()
+        primary_colored("run").bold()
     );
     let bottom = "╰────────────────────────────────────────────────────────────╯";
-    println!("{}", electric_blue(top));
+    println!("{}", primary_colored(top));
     println!("{}", title);
-    println!("{}", electric_blue(bottom));
+    println!("{}", primary_colored(bottom));
     println!();
 }
 
@@ -59,12 +265,16 @@ pub fn render_breadcrumbs(crumbs: &[&str]) {
             if i == crumbs.len() - 1 {
                 format!("{}", c.bold().white())
             } else {
-                format!("{}", electric_blue(c).dimmed())
+                format!("{}", primary_colored(c).dimmed())
             }
         })
         .collect();
-    let arrow = format!(" {} ", electric_blue("›").bold());
-    println!(" {} {}", electric_blue("›").bold(), formatted.join(&arrow));
+    let arrow = format!(" {} ", primary_colored("›").bold());
+    println!(
+        " {} {}",
+        primary_colored("›").bold(),
+        formatted.join(&arrow)
+    );
     println!();
 }
 
@@ -95,7 +305,7 @@ pub fn print_card(title: &str, rows: &[(&str, String)]) {
     let title_prefix_len = visible_len(&title_prefix);
     let top_pad = content_width.saturating_sub(title_prefix_len);
     let top_bar = format!("{}{}{}", title_prefix, "─".repeat(top_pad), "╮");
-    println!("{}", electric_blue(&top_bar));
+    println!("{}", primary_colored(&top_bar));
 
     for (label, val) in rows {
         let label_vis = visible_len(label);
@@ -107,16 +317,16 @@ pub fn print_card(title: &str, rows: &[(&str, String)]) {
 
         println!(
             "{} {}{}{}{}",
-            electric_blue("│"),
+            primary_colored("│"),
             left,
             val,
             " ".repeat(right_pad),
-            electric_blue("│")
+            primary_colored("│")
         );
     }
 
     let bottom_bar = format!("╰{}╯", "─".repeat(content_width));
-    println!("{}", electric_blue(&bottom_bar));
+    println!("{}", primary_colored(&bottom_bar));
     println!();
 }
 
@@ -159,7 +369,7 @@ impl Spinner {
             let mut stderr = io::stderr();
             while r_clone.load(Ordering::Relaxed) {
                 let frame = frames[i % frames.len()];
-                let _ = write!(stderr, "\r{} {} ", electric_blue(frame).bold(), message);
+                let _ = write!(stderr, "\r{} {} ", primary_colored(frame).bold(), message);
                 let _ = stderr.flush();
                 thread::sleep(Duration::from_millis(80));
                 i += 1;

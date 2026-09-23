@@ -4,7 +4,7 @@
 
 ---
 
-## Command Reference Matrix (40 Commands)
+## Command Reference Matrix (41 Commands)
 
 ### 🛠️ Developer & Workspace Suite
 
@@ -18,6 +18,7 @@
 | `sync` | `snc` | `git` | 1-step Git pull, status review, commit message prompt, and push |
 | `docker` | `dck` | - | Inspect and manage Docker/OrbStack containers, view logs, start or stop |
 | `secret` | `sec` | `dotenv` | Audit local `.env` variables against `.env.example` and generate sanitized templates (`--fix`) |
+| `config` | `cfg` | - | Manage CLI settings, custom primary colors, editor & auto-clear (`run cfg`) |
 | `network` | `net` | `ip` | Inspect local LAN and public WAN IP addresses with interactive copy to clipboard |
 | `share` | `shr` | - | Instant local HTTP file server on local network (`run share -p 8080`) |
 | `bench` | `bnc` | - | Benchmark command execution duration with high-resolution microsecond timer |
@@ -262,16 +263,50 @@ run completion fish
 # Tip: eval "$(run init)" in ~/.zshrc automatically sources completions!
 ```
 
+### 7. Configuration & Custom Theme
+
+```bash
+# Open interactive configuration dashboard:
+run config
+run cfg
+
+# Set custom primary accent color (supports presets or arbitrary hex):
+run cfg set primary_color "#ff007f"
+run cfg set primary_color violet
+
+# Get current configuration value:
+run cfg get primary_color
+run cfg get default_ide
+
+# Toggle auto-clear terminal screen:
+run cfg set auto_clear true
+
+# Print config file path or open in system editor:
+run cfg path
+run cfg edit
+
+# Reset configuration to factory defaults:
+run cfg reset
+```
+
 ---
 
-## ⚙️ Configuration (`~/.config/run/config.toml`)
+## ⚙️ Configuration File (`~/.config/run/config.toml`)
 
 `run` automatically creates a configuration template at `~/.config/run/config.toml` upon first run.
 
 ```toml
+# Primary theme accent color:
+# Presets: "electric-blue" (default), "violet", "emerald", "amber", "rose", "cyan"
+# Or use any custom HEX color code: "#ff007f", "#8b5cf6", "#10b981", "#00a2ff"
+primary_color = "electric-blue"
+
+# Automatically clear terminal screen before interactive menus:
+auto_clear = false
+
 # Default editor to open projects directly without prompting:
 # Options: "antigravity", "cursor", "vscode", "xcode", "terminal", "ask" (default)
-default_ide = "antigravity"
+default_ide = "ask"
 
 # Additional custom directory hubs to scan for projects in `run project`:
 custom_hubs = [

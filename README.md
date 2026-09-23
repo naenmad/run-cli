@@ -94,12 +94,20 @@ Now `run go root`, `run go back`, or selecting a project with **"Switch Terminal
 
 ## 🛠️ Configuration (`~/.config/run/config.toml`)
 
-`run` auto-creates a config file at `~/.config/run/config.toml`:
+`run` auto-creates a config file at `~/.config/run/config.toml` (or manage it interactively via `run config`):
 
 ```toml
+# Primary theme accent color:
+# Presets: "electric-blue" (default), "violet", "emerald", "amber", "rose", "cyan"
+# Or use any custom HEX color code: "#ff007f", "#8b5cf6", "#10b981", "#00a2ff"
+primary_color = "electric-blue"
+
+# Automatically clear terminal screen before interactive menus
+auto_clear = false
+
 # Default editor to open projects directly without prompting:
 # Options: "antigravity", "cursor", "vscode", "xcode", "terminal", "ask" (default)
-default_ide = "antigravity"
+default_ide = "ask"
 
 # Additional custom directory hubs to scan in `run project`:
 custom_hubs = [
@@ -112,7 +120,7 @@ custom_hubs = [
 
 ## 🎯 Command Cheatsheet
 
-`run` includes **40 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
+`run` includes **41 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
 
 ### 🛠️ Developer & Workspace Suite
 | Command | Alias | Purpose & Highlights |
@@ -125,6 +133,7 @@ custom_hubs = [
 | `sync` | `snc`, `git` | 1-step Git pull, status review, commit message prompt, and push |
 | `docker` | `dck` | Inspect and manage Docker/OrbStack containers, view logs, start or stop |
 | `secret` | `sec`, `dotenv` | Audit local `.env` against `.env.example` and generate sanitized templates (`--fix`) |
+| `config` | `cfg` | Manage CLI settings, custom primary colors, editor & auto-clear (`run cfg`) |
 | `network` | `net`, `ip` | Inspects local LAN (en0/en1) and public WAN IP with interactive clipboard copy |
 | `share` | `shr` | Instant local HTTP file server on LAN (`run share -p 8080`) |
 | `bench` | `bnc` | Microsecond-precision command execution benchmark timer |
