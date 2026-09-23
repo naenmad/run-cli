@@ -1710,3 +1710,196 @@ pub fn handle_bench(theme: &ColorfulTheme, command_args: &[String]) -> Result<()
 
     Ok(())
 }
+
+/// speedtest (alias: spd, speed) - Measure network bandwidth throughput and responsiveness
+pub fn handle_speedtest(_theme: &ColorfulTheme, sequential: bool) -> Result<()> {
+    let has_network_quality = Command::new("which")
+        .arg("networkQuality")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if has_network_quality {
+        let mut sp = ui::Spinner::start(
+            "Testing internet bandwidth throughput, latency & responsiveness...",
+        );
+        let mut cmd = Command::new("networkQuality");
+        cmd.arg("-c");
+        if sequential {
+            cmd.arg("-s");
+        }
+        let output = cmd.output().context("failed to execute networkQuality")?;
+        sp.stop();
+
+        if output.status.success() {
+            let json_str = String::from_utf8_lossy(&output.stdout);
+
+            let dl_bps = parse_json_number(&json_str, "dl_throughput");
+            let ul_bps = parse_json_number(&json_str, "ul_throughput");
+            let base_rtt = parse_json_float(&json_str, "base_rtt");
+            let responsiveness = parse_json_float(&json_str, "responsiveness");
+            let iface = parse_json_string(&json_str, "interface_name");
+            let endpoint = parse_json_string(&json_str, "test_endpoint");
+
+            let mut rows = Vec::new();
+            if let Some(dl) = dl_bps {
+                rows.push((
+                    "Download",
+                    format!("{} 🟢", format_bps(dl)).green().bold().to_string(),
+                ));
+            }
+            if let Some(ul) = ul_bps {
+                rows.push((
+                    "Upload",
+                    format!("{} 🟢", format_bps(ul)).green().bold().to_string(),
+                ));
+            }
+            if let Some(rtt) = base_rtt {
+                rows.push(("Base Latency", format!("{:.1} ms", rtt)));
+            }
+            if let Some(rpm) = responsiveness {
+                rows.push(("Responsiveness", responsiveness_rating(rpm)));
+            }
+            if let Some(i) = iface {
+                rows.push((
+                    "Interface",
+                    format!(
+                        "{} {}",
+                        i.bold(),
+                        " 🌐 [LAN] ".bold().bright_blue().on_black()
+                    ),
+                ));
+            }
+            if let Some(ep) = endpoint {
+                rows.push(("Server", ep));
+            }
+
+            ui::print_card("🚀 NETWORK SPEEDTEST RESULT", &rows);
+            return Ok(());
+        }
+    }
+
+    // Fallback: check speedtest-cli
+    let has_speedtest_cli = Command::new("which")
+        .arg("speedtest-cli")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if has_speedtest_cli {
+        println!("{}", electric_blue("Running speedtest-cli...").bold());
+        let status = Command::new("speedtest-cli").arg("--simple").status()?;
+        if status.success() {
+            return Ok(());
+        }
+    }
+
+    // Fallback: fast curl download test
+    let mut sp =
+        ui::Spinner::start("Measuring download speed via Cloudflare CDN (10MB payload)...");
+    let start = std::time::Instant::now();
+    let curl_status = Command::new("curl")
+        .args([
+            "-s",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{speed_download}",
+            "https://speed.cloudflare.com/__down?bytes=10000000",
+        ])
+        .output();
+    sp.stop();
+
+    if let Ok(out) = curl_status
+        && out.status.success()
+    {
+        let speed_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let bytes_per_sec = speed_str.parse::<f64>().unwrap_or(0.0);
+        let mbps = (bytes_per_sec * 8.0) / 1_000_000.0;
+        let duration = start.elapsed();
+
+        let rows = [
+            (
+                "Download",
+                format!("{:.2} Mbps 🟢", mbps).green().bold().to_string(),
+            ),
+            ("Payload", "10 MB".to_string()),
+            (
+                "Duration",
+                format!("{:.2?} ({:.2}s)", duration, duration.as_secs_f64()),
+            ),
+            ("Server", "Cloudflare Speed Test CDN".to_string()),
+        ];
+        ui::print_card("🚀 NETWORK SPEEDTEST RESULT (FALLBACK)", &rows);
+        return Ok(());
+    }
+
+    bail!(
+        "unable to run speedtest: neither networkQuality nor working internet connection available"
+    );
+}
+
+fn parse_json_number(json: &str, key: &str) -> Option<u64> {
+    let pattern = format!("\"{}\"", key);
+    if let Some(pos) = json.find(&pattern) {
+        let after = &json[pos + pattern.len()..];
+        if let Some(colon) = after.find(':') {
+            let val_str = after[colon + 1..].trim_start();
+            let num_str: String = val_str.chars().take_while(|c| c.is_ascii_digit()).collect();
+            return num_str.parse::<u64>().ok();
+        }
+    }
+    None
+}
+
+fn parse_json_float(json: &str, key: &str) -> Option<f64> {
+    let pattern = format!("\"{}\"", key);
+    if let Some(pos) = json.find(&pattern) {
+        let after = &json[pos + pattern.len()..];
+        if let Some(colon) = after.find(':') {
+            let val_str = after[colon + 1..].trim_start();
+            let num_str: String = val_str
+                .chars()
+                .take_while(|c| c.is_ascii_digit() || *c == '.')
+                .collect();
+            return num_str.parse::<f64>().ok();
+        }
+    }
+    None
+}
+
+fn parse_json_string(json: &str, key: &str) -> Option<String> {
+    let pattern = format!("\"{}\"", key);
+    if let Some(pos) = json.find(&pattern) {
+        let after = &json[pos + pattern.len()..];
+        if let Some(colon) = after.find(':') {
+            let val_str = after[colon + 1..].trim_start();
+            if let Some(quote_start) = val_str.find('"') {
+                let rest = &val_str[quote_start + 1..];
+                if let Some(quote_end) = rest.find('"') {
+                    return Some(rest[..quote_end].to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn format_bps(bps: u64) -> String {
+    let mbps = bps as f64 / 1_000_000.0;
+    if mbps >= 1000.0 {
+        format!("{:.2} Gbps", mbps / 1000.0)
+    } else {
+        format!("{:.2} Mbps", mbps)
+    }
+}
+
+fn responsiveness_rating(rpm: f64) -> String {
+    if rpm >= 1000.0 {
+        format!("High ({:.0} RPM) 🟢", rpm)
+    } else if rpm >= 400.0 {
+        format!("Medium ({:.0} RPM) 🟡", rpm)
+    } else {
+        format!("Low ({:.0} RPM) 🔴", rpm)
+    }
+}

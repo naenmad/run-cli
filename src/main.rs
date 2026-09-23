@@ -302,6 +302,14 @@ enum Commands {
         command: Vec<String>,
     },
 
+    /// Test network internet speed and responsiveness
+    #[command(name = "speedtest", alias = "spd", alias = "speed")]
+    Speedtest {
+        /// Run tests sequentially instead of parallel
+        #[arg(short, long)]
+        sequential: bool,
+    },
+
     /// Display complete command reference and usage tutorial
     #[command(name = "help", alias = "doc", alias = "guide")]
     Help {
@@ -545,6 +553,12 @@ const ALL_COMMANDS: &[CommandInfo] = &[
         alias_3: "bnc",
         aliases: &["bnc"],
         description: "High-resolution command execution benchmark",
+    },
+    CommandInfo {
+        name: "speedtest",
+        alias_3: "spd",
+        aliases: &["spd", "speed"],
+        description: "Measure internet download, upload and latency",
     },
     CommandInfo {
         name: "help",
@@ -811,7 +825,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
         3 => ALL_COMMANDS
             .iter()
             .copied()
-            .filter(|c| ["port", "fetch", "ping", "pack", "unpack"].contains(&c.name))
+            .filter(|c| ["port", "fetch", "ping", "pack", "unpack", "speedtest"].contains(&c.name))
             .collect(),
         4 => ALL_COMMANDS.to_vec(),
         _ => return Ok(()),
@@ -914,6 +928,7 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
         Commands::Network => commands::handle_net(theme),
         Commands::Share { port, path } => commands::handle_share(theme, port, path),
         Commands::Bench { command } => commands::handle_bench(theme, &command),
+        Commands::Speedtest { sequential } => commands::handle_speedtest(theme, sequential),
         Commands::Init => handle_init(),
         Commands::Help { command } => handle_help(command.as_deref()),
     }
@@ -1153,7 +1168,11 @@ fn find_matching_apps(query: &str, installed: &[String]) -> Vec<String> {
         .collect();
 
     fuzzy_candidates.sort_by_key(|(_, dist)| *dist);
-    fuzzy_candidates.into_iter().take(5).map(|(a, _)| a.clone()).collect()
+    fuzzy_candidates
+        .into_iter()
+        .take(5)
+        .map(|(a, _)| a.clone())
+        .collect()
 }
 
 /// Handles opening macOS applications with smart fuzzy matching and typo resolution.
@@ -1197,7 +1216,10 @@ fn handle_open(theme: &ColorfulTheme, target: Option<String>) -> Result<()> {
     // 1. Try launching with the exact name given
     let direct_status = Command::new("open").arg("-a").arg(&app_name).status();
     if direct_status.map(|s| s.success()).unwrap_or(false) {
-        println!("{}", format!("Opened application: {app_name}").green().bold());
+        println!(
+            "{}",
+            format!("Opened application: {app_name}").green().bold()
+        );
         return Ok(());
     }
 
@@ -1220,7 +1242,10 @@ fn handle_open(theme: &ColorfulTheme, target: Option<String>) -> Result<()> {
         if !status.success() {
             bail!("failed to launch application '{target_app}'");
         }
-        println!("{}", format!("Opened application: {target_app}").green().bold());
+        println!(
+            "{}",
+            format!("Opened application: {target_app}").green().bold()
+        );
     } else {
         let mut menu_items = matches.clone();
         menu_items.push(cancel_option());
@@ -1246,7 +1271,10 @@ fn handle_open(theme: &ColorfulTheme, target: Option<String>) -> Result<()> {
         if !status.success() {
             bail!("failed to launch application '{selected_app}'");
         }
-        println!("{}", format!("Opened application: {selected_app}").green().bold());
+        println!(
+            "{}",
+            format!("Opened application: {selected_app}").green().bold()
+        );
     }
 
     Ok(())
@@ -2016,7 +2044,9 @@ fn open_in_antigravity(path: &Path, is_shell_resolve: bool) -> Result<()> {
                 .status()
                 .with_context(|| "failed to launch Antigravity IDE via open -a")?;
             if !alt_fallback.success() {
-                bail!("failed to launch Antigravity IDE (ensure Antigravity IDE is installed in /Applications)");
+                bail!(
+                    "failed to launch Antigravity IDE (ensure Antigravity IDE is installed in /Applications)"
+                );
             }
         }
     }
@@ -2507,6 +2537,11 @@ fn print_main_help() {
         "Create compressed archive (.tar.gz, .zip)",
     );
     print_cmd_summary("unpack", "upk (unzip)", "Extract compressed archive");
+    print_cmd_summary(
+        "speedtest",
+        "spd (speed)",
+        "Measure internet download, upload and latency",
+    );
     println!();
     println!("{}", electric_blue("UTILITY:").bold());
     print_cmd_summary("open", "opn", "Launch macOS applications (open -a)");
@@ -2878,6 +2913,19 @@ fn print_command_detail(cmd: &str) {
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run bench <command...>    Benchmark command execution");
             println!("  run bnc cargo build       Example");
+        }
+        "speedtest" | "spd" | "speed" => {
+            println!(
+                "{} speedtest (alias: spd, speed)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!(
+                "Measure network download throughput, upload throughput and responsiveness.\n"
+            );
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run speedtest             Run full parallel download & upload speed test");
+            println!("  run spd                   Alias");
+            println!("  run spd -s                Run sequentially instead of parallel");
         }
         "open" | "opn" => {
             println!("{} open (alias: opn)", electric_blue("COMMAND:").bold());
@@ -3419,6 +3467,27 @@ mod tests {
             Cli::try_parse_from(["run", "bnc", "ls"]),
             Ok(Cli { command: Some(Commands::Bench { ref command }) }) if command == &["ls"]
         ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "speedtest"]),
+            Ok(Cli {
+                command: Some(Commands::Speedtest { sequential: false })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "spd", "-s"]),
+            Ok(Cli {
+                command: Some(Commands::Speedtest { sequential: true })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "speed"]),
+            Ok(Cli {
+                command: Some(Commands::Speedtest { sequential: false })
+            })
+        ));
     }
 
     #[test]
@@ -3472,7 +3541,10 @@ mod tests {
         assert_eq!(find_matching_apps("safari", &installed), vec!["Safari"]);
 
         // Substring match: Code -> Visual Studio Code
-        assert_eq!(find_matching_apps("Code", &installed), vec!["Visual Studio Code"]);
+        assert_eq!(
+            find_matching_apps("Code", &installed),
+            vec!["Visual Studio Code"]
+        );
 
         // Typo match (Levenshtein distance <= 3): whasap -> WhatsApp
         assert_eq!(find_matching_apps("whasap", &installed), vec!["WhatsApp"]);

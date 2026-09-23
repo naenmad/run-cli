@@ -88,7 +88,7 @@ Now `run go root`, `run go back`, or selecting a project with **"Switch Terminal
 
 ## 🎯 Command Cheatsheet
 
-`run` includes **36 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
+`run` includes **37 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
 
 ### 🛠️ Developer & Workspace Suite
 | Command | Alias | Purpose & Highlights |
@@ -133,6 +133,7 @@ Now `run go root`, `run go back`, or selecting a project with **"Switch Terminal
 ### 🌐 Network & Archive
 | Command | Alias | Unix Alias | Purpose |
 | :--- | :--- | :--- | :--- |
+| `speedtest` | `spd`, `speed` | `networkQuality` | Measure internet download, upload throughput and responsiveness |
 | `fetch` | `fch` | `curl`, `wget` | Fetch HTTP response headers/body or download files with progress bar |
 | `ping` | `png` | - | Test host latency with packet summary |
 | `pack` | `pck` | `tar`, `zip` | Create compressed `.tar.gz` or `.zip` archive |

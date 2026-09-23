@@ -4,7 +4,7 @@
 
 ---
 
-## Command Reference Matrix (36 Commands)
+## Command Reference Matrix (37 Commands)
 
 ### 🛠️ Developer & Workspace Suite
 
@@ -52,6 +52,7 @@
 
 | Semantic Command | 3-Letter Alias | Unix Aliases | Purpose |
 | :--- | :--- | :--- | :--- |
+| `speedtest` | `spd` | `speed`, `networkQuality` | Measure internet download, upload throughput and responsiveness |
 | `port` | `prt` | `lsof` | Check active listening TCP ports and sockets |
 | `fetch` | `fch` | `curl`, `wget`, `get` | Fetch HTTP response or download file locally with progress bar |
 | `ping` | `png` | - | Test network host latency |
