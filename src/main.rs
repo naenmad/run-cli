@@ -5,6 +5,8 @@ use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
+use colored::Colorize;
+use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Input, Select};
 
 #[derive(Parser)]
@@ -70,33 +72,50 @@ enum MakeTargetType {
     File,
 }
 
-fn main() -> Result<()> {
+fn main() {
+    if let Err(err) = run_app() {
+        eprintln!(
+            "\n{} {}\n",
+            "❌ Error:".bold().red(),
+            format!("{err:#}").red()
+        );
+        std::process::exit(1);
+    }
+}
+
+fn run_app() -> Result<()> {
     let cli = Cli::parse();
+    let theme = ColorfulTheme::default();
 
     match cli.command {
-        Commands::Make { target_type, name } => handle_make(target_type, name),
-        Commands::Open { target } => handle_open(target),
+        Commands::Make { target_type, name } => handle_make(&theme, target_type, name),
+        Commands::Open { target } => handle_open(&theme, target),
         Commands::Copy {
             source,
             destination,
-        } => handle_copy(source, destination),
+        } => handle_copy(&theme, source, destination),
         Commands::Move {
             source,
             destination,
-        } => handle_move(source, destination),
-        Commands::Del { target } => handle_del(target),
+        } => handle_move(&theme, source, destination),
+        Commands::Del { target } => handle_del(&theme, target),
         Commands::Clear => clear_terminal(),
     }
 }
 
 /// Handles folder or file creation in both direct and interactive modes.
-fn handle_make(target_type: Option<MakeTargetType>, name: Option<PathBuf>) -> Result<()> {
+fn handle_make(
+    theme: &ColorfulTheme,
+    target_type: Option<MakeTargetType>,
+    name: Option<PathBuf>,
+) -> Result<()> {
     let resolved_type = match target_type {
         Some(t) => t,
         None => {
+            println!("\n{} {}", "🚀".cyan(), "Interactive Item Creation".bold().cyan());
             let options = ["Folder", "File"];
-            let selection = Select::new()
-                .with_prompt("Select item type to create")
+            let selection = Select::with_theme(theme)
+                .with_prompt("Choose item type to create")
                 .items(&options)
                 .default(0)
                 .interact()?;
@@ -112,10 +131,10 @@ fn handle_make(target_type: Option<MakeTargetType>, name: Option<PathBuf>) -> Re
         Some(path) => path,
         None => {
             let prompt_text = match resolved_type {
-                MakeTargetType::Folder => "Folder name or path",
-                MakeTargetType::File => "File name or path",
+                MakeTargetType::Folder => "Enter new folder path",
+                MakeTargetType::File => "Enter new file path",
             };
-            let input: String = Input::new()
+            let input: String = Input::with_theme(theme)
                 .with_prompt(prompt_text)
                 .interact_text()?;
             PathBuf::from(input.trim())
@@ -129,12 +148,13 @@ fn handle_make(target_type: Option<MakeTargetType>, name: Option<PathBuf>) -> Re
 }
 
 /// Handles opening macOS applications with a fallback prompt when target is omitted.
-fn handle_open(target: Option<String>) -> Result<()> {
+fn handle_open(theme: &ColorfulTheme, target: Option<String>) -> Result<()> {
     let app_name = match target {
         Some(name) => name,
         None => {
-            let input: String = Input::new()
-                .with_prompt("Name of macOS application to open")
+            println!("\n{} {}", "ℹ️".cyan(), "Open macOS Application".bold().cyan());
+            let input: String = Input::with_theme(theme)
+                .with_prompt("Enter application name")
                 .interact_text()?;
             input.trim().to_string()
         }
@@ -143,6 +163,12 @@ fn handle_open(target: Option<String>) -> Result<()> {
     if app_name.is_empty() {
         bail!("Application name cannot be empty");
     }
+
+    println!(
+        "\n{} {}",
+        "🚀".cyan(),
+        format!("Launching application '{app_name}'...").cyan()
+    );
 
     let status = Command::new("open")
         .arg("-a")
@@ -154,17 +180,26 @@ fn handle_open(target: Option<String>) -> Result<()> {
         bail!("Application '{app_name}' was not found or failed to launch");
     }
 
-    println!("Application '{app_name}' opened.");
+    println!(
+        "{} {}\n",
+        "✅".green(),
+        format!("Success: '{app_name}' is now open.").bold().green()
+    );
     Ok(())
 }
 
 /// Handles copying items with interactive prompts when arguments are missing.
-fn handle_copy(source: Option<PathBuf>, destination: Option<PathBuf>) -> Result<()> {
+fn handle_copy(
+    theme: &ColorfulTheme,
+    source: Option<PathBuf>,
+    destination: Option<PathBuf>,
+) -> Result<()> {
     let src = match source {
         Some(path) => path,
         None => {
-            let input: String = Input::new()
-                .with_prompt("Source path (file or folder)")
+            println!("\n{} {}", "ℹ️".cyan(), "Copy Item".bold().cyan());
+            let input: String = Input::with_theme(theme)
+                .with_prompt("Enter source path (file or folder)")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
@@ -173,8 +208,8 @@ fn handle_copy(source: Option<PathBuf>, destination: Option<PathBuf>) -> Result<
     let dst = match destination {
         Some(path) => path,
         None => {
-            let input: String = Input::new()
-                .with_prompt("Destination path")
+            let input: String = Input::with_theme(theme)
+                .with_prompt("Enter destination path")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
@@ -184,12 +219,17 @@ fn handle_copy(source: Option<PathBuf>, destination: Option<PathBuf>) -> Result<
 }
 
 /// Handles moving or renaming items with interactive prompts when arguments are missing.
-fn handle_move(source: Option<PathBuf>, destination: Option<PathBuf>) -> Result<()> {
+fn handle_move(
+    theme: &ColorfulTheme,
+    source: Option<PathBuf>,
+    destination: Option<PathBuf>,
+) -> Result<()> {
     let src = match source {
         Some(path) => path,
         None => {
-            let input: String = Input::new()
-                .with_prompt("Source path (file or folder)")
+            println!("\n{} {}", "ℹ️".cyan(), "Move or Rename Item".bold().cyan());
+            let input: String = Input::with_theme(theme)
+                .with_prompt("Enter source path (file or folder)")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
@@ -198,8 +238,8 @@ fn handle_move(source: Option<PathBuf>, destination: Option<PathBuf>) -> Result<
     let dst = match destination {
         Some(path) => path,
         None => {
-            let input: String = Input::new()
-                .with_prompt("Destination path")
+            let input: String = Input::with_theme(theme)
+                .with_prompt("Enter destination path")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
@@ -209,12 +249,13 @@ fn handle_move(source: Option<PathBuf>, destination: Option<PathBuf>) -> Result<
 }
 
 /// Handles file or folder deletion with a safe confirmation dialog.
-fn handle_del(target: Option<PathBuf>) -> Result<()> {
+fn handle_del(theme: &ColorfulTheme, target: Option<PathBuf>) -> Result<()> {
     let path = match target {
         Some(p) => p,
         None => {
-            let input: String = Input::new()
-                .with_prompt("Path of file or folder to delete")
+            println!("\n{} {}", "⚠️".yellow(), "Delete Item".bold().yellow());
+            let input: String = Input::with_theme(theme)
+                .with_prompt("Enter path to delete")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
@@ -224,13 +265,24 @@ fn handle_del(target: Option<PathBuf>) -> Result<()> {
         bail!("Target path does not exist: {}", path.display());
     }
 
-    let confirmation = Confirm::new()
-        .with_prompt(format!("Are you sure you want to delete '{}'?", path.display()))
+    let item_kind = if path.is_dir() { "directory" } else { "file" };
+
+    let prompt = format!(
+        "⚠️  Are you sure you want to permanently delete {item_kind} '{}'?",
+        path.display()
+    );
+
+    let confirmation = Confirm::with_theme(theme)
+        .with_prompt(prompt.yellow().to_string())
         .default(false)
         .interact()?;
 
     if !confirmation {
-        println!("Deletion cancelled.");
+        println!(
+            "\n{} {}\n",
+            "⚠️".yellow(),
+            "Warning: Deletion cancelled by user.".yellow()
+        );
         return Ok(());
     }
 
@@ -242,7 +294,13 @@ fn make_directory(path: &Path) -> Result<()> {
     fs::create_dir_all(path)
         .with_context(|| format!("Failed to create directory '{}'", path.display()))?;
 
-    println!("Directory created: {}", path.display());
+    println!(
+        "\n{} {}\n",
+        "✅".green(),
+        format!("Success: Directory '{}' created.", path.display())
+            .bold()
+            .green()
+    );
     Ok(())
 }
 
@@ -253,7 +311,13 @@ fn create_empty_file(path: &Path) -> Result<()> {
     fs::File::create_new(path)
         .with_context(|| format!("Failed to create file '{}' (file may already exist)", path.display()))?;
 
-    println!("File created: {}", path.display());
+    println!(
+        "\n{} {}\n",
+        "✅".green(),
+        format!("Success: File '{}' created.", path.display())
+            .bold()
+            .green()
+    );
     Ok(())
 }
 
@@ -277,9 +341,15 @@ fn copy_item(source: &Path, destination: &Path) -> Result<()> {
     }
 
     println!(
-        "Copied '{}' to '{}'",
-        source.display(),
-        destination.display()
+        "\n{} {}\n",
+        "✅".green(),
+        format!(
+            "Success: Copied '{}' to '{}'.",
+            source.display(),
+            destination.display()
+        )
+        .bold()
+        .green()
     );
     Ok(())
 }
@@ -325,25 +395,38 @@ fn move_item(source: &Path, destination: &Path) -> Result<()> {
     })?;
 
     println!(
-        "Moved '{}' to '{}'",
-        source.display(),
-        destination.display()
+        "\n{} {}\n",
+        "✅".green(),
+        format!(
+            "Success: Moved '{}' to '{}'.",
+            source.display(),
+            destination.display()
+        )
+        .bold()
+        .green()
     );
     Ok(())
 }
 
 /// Deletes a single file or an entire directory tree.
 fn delete_item(path: &Path) -> Result<()> {
-    if path.is_dir() {
+    let item_kind = if path.is_dir() {
         fs::remove_dir_all(path)
             .with_context(|| format!("Failed to delete directory '{}'", path.display()))?;
-        println!("Directory deleted: {}", path.display());
+        "Directory"
     } else {
         fs::remove_file(path)
             .with_context(|| format!("Failed to delete file '{}'", path.display()))?;
-        println!("File deleted: {}", path.display());
-    }
+        "File"
+    };
 
+    println!(
+        "\n{} {}\n",
+        "✅".green(),
+        format!("Success: {item_kind} '{}' deleted.", path.display())
+            .bold()
+            .green()
+    );
     Ok(())
 }
 
