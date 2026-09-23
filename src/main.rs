@@ -557,6 +557,12 @@ fn find_matching_directories(current_dir: &Path, home_dir: &Path, query: &str) -
     for hub in &hubs {
         let hub_path = home_dir.join(hub);
         if hub_path.is_dir() {
+            if visited.insert(hub_path.clone()) {
+                let score = score_name(hub, &q_lower, false, true, 0.0);
+                if score > 0.0 {
+                    scored.push((score, hub_path.clone()));
+                }
+            }
             search_roots.push((hub_path, 2));
         }
     }
@@ -566,30 +572,71 @@ fn find_matching_directories(current_dir: &Path, home_dir: &Path, query: &str) -
         ".gemini", ".vscode", ".npm", ".cache", ".local", "venv", ".venv",
     ];
 
+    let mut ctx = SearchContext {
+        q_lower: &q_lower,
+        current_dir,
+        ignored_names: &ignored_names,
+        visited: &mut visited,
+        scored: &mut scored,
+    };
+
     for (root, max_depth) in search_roots {
-        scan_for_query(
-            &root,
-            &q_lower,
-            current_dir,
-            max_depth,
-            &ignored_names,
-            &mut visited,
-            &mut scored,
-        );
+        scan_for_query(&root, max_depth, 0, &mut ctx);
     }
 
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
     scored.into_iter().map(|(_, path)| path).collect()
 }
 
+fn score_name(
+    name: &str,
+    q_lower: &str,
+    is_current_sub: bool,
+    is_hub: bool,
+    depth_penalty: f64,
+) -> f64 {
+    let name_lower = name.to_lowercase();
+    let mut score = 0.0;
+
+    if name_lower == q_lower {
+        score = 1.0;
+    } else if name_lower.starts_with(q_lower) {
+        score = 0.90;
+    } else if name_lower.contains(q_lower) {
+        score = 0.80;
+    } else if q_lower.len() >= 3 && name_lower.len() >= 3 {
+        let similarity = strsim::jaro_winkler(&name_lower, q_lower);
+        if similarity >= 0.82 {
+            score = similarity * 0.75;
+        }
+    }
+
+    if score > 0.0 {
+        if is_hub {
+            score += 0.08;
+        }
+        if is_current_sub {
+            score += 0.05;
+        }
+        score -= depth_penalty;
+    }
+
+    score
+}
+
+struct SearchContext<'a> {
+    q_lower: &'a str,
+    current_dir: &'a Path,
+    ignored_names: &'a [&'a str],
+    visited: &'a mut HashSet<PathBuf>,
+    scored: &'a mut Vec<(f64, PathBuf)>,
+}
+
 fn scan_for_query(
     dir: &Path,
-    q_lower: &str,
-    current_dir: &Path,
     depth: usize,
-    ignored_names: &[&str],
-    visited: &mut HashSet<PathBuf>,
-    scored: &mut Vec<(f64, PathBuf)>,
+    depth_from_root: usize,
+    ctx: &mut SearchContext,
 ) {
     if depth == 0 {
         return;
@@ -611,43 +658,20 @@ fn scan_for_query(
             None => continue,
         };
 
-        if name.starts_with('.') || ignored_names.contains(&name) {
+        if name.starts_with('.') || ctx.ignored_names.contains(&name) {
             continue;
         }
 
-        if visited.insert(path.clone()) {
-            let name_lower = name.to_lowercase();
-            let mut score = 0.0;
-
-            if name_lower == q_lower {
-                score = 1.0;
-            } else if name_lower.starts_with(q_lower) {
-                score = 0.90;
-            } else if name_lower.contains(q_lower) {
-                score = 0.80;
-            } else if q_lower.len() >= 3 && name_lower.len() >= 3 {
-                let similarity = strsim::jaro_winkler(&name_lower, q_lower);
-                if similarity >= 0.82 {
-                    score = similarity * 0.75;
-                }
-            }
+        if ctx.visited.insert(path.clone()) {
+            let is_current_sub = path.starts_with(ctx.current_dir);
+            let depth_penalty = depth_from_root as f64 * 0.04;
+            let score = score_name(name, ctx.q_lower, is_current_sub, false, depth_penalty);
 
             if score > 0.0 {
-                if path.starts_with(current_dir) {
-                    score += 0.05;
-                }
-                scored.push((score, path.clone()));
+                ctx.scored.push((score, path.clone()));
             }
 
-            scan_for_query(
-                &path,
-                q_lower,
-                current_dir,
-                depth - 1,
-                ignored_names,
-                visited,
-                scored,
-            );
+            scan_for_query(&path, depth - 1, depth_from_root + 1, ctx);
         }
     }
 }
