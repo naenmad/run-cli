@@ -506,7 +506,7 @@ fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
     } else {
         println!("Target directory: {}", target_path.display());
         eprintln!(
-            "Tip: Add 'eval \"$(run init)\"' to your ~/.zshrc for seamless in-place terminal directory switching."
+            "Notice: Run 'source ~/.zshrc' in this terminal tab to activate in-place directory switching."
         );
     }
 
