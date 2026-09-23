@@ -116,7 +116,7 @@ fn main() {
 
 fn run_app() -> Result<()> {
     let cli = Cli::parse();
-    let theme = ColorfulTheme::default();
+    let theme = custom_theme();
 
     match cli.command {
         Commands::Make { target_type, name } => handle_make(&theme, target_type, name),
@@ -1237,6 +1237,21 @@ fn electric_blue(text: &str) -> colored::ColoredString {
     text.truecolor(0, 162, 255)
 }
 
+/// Creates a customized dialoguer theme replacing default cyan with high-contrast electric blue.
+fn custom_theme() -> ColorfulTheme {
+    let mut theme = ColorfulTheme::default();
+    let electric_style = dialoguer::console::Style::new().for_stderr().color256(39).bold();
+    let electric_symbol = dialoguer::console::style("❯".to_string()).for_stderr().color256(39).bold();
+
+    theme.prompt_style = dialoguer::console::Style::new().for_stderr().bold();
+    theme.prompt_prefix = dialoguer::console::style("?".to_string()).for_stderr().color256(39).bold();
+    theme.values_style = electric_style.clone();
+    theme.active_item_style = electric_style;
+    theme.active_item_prefix = electric_symbol.clone();
+    theme.picked_item_prefix = electric_symbol;
+    theme
+}
+
 /// Displays beautifully formatted terminal help reference and command details.
 fn handle_help(target_command: Option<&str>) -> Result<()> {
     match target_command {
@@ -1438,6 +1453,11 @@ fn print_command_detail(cmd: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_custom_theme() {
+        let _theme = custom_theme();
+    }
 
     #[test]
     fn test_cli_parsing_direct_and_aliases() {
