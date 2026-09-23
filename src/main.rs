@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::fs;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -18,7 +18,7 @@ mod commands;
 #[command(disable_help_subcommand = true)]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -75,7 +75,7 @@ enum Commands {
     Clear,
 
     /// Smart directory navigation (root, back, subfolder, or interactive menu)
-    #[command(name = "go", alias = "jmp", aliases = ["nav", "cd"])]
+    #[command(name = "go", alias = "jmp", aliases = ["nav", "cd", "g"])]
     Go {
         /// Target folder name, 'root', or 'back'
         target: Option<String>,
@@ -119,7 +119,7 @@ enum Commands {
     },
 
     /// Inspect running processes or system resource snapshot
-    #[command(name = "process", alias = "prc", aliases = ["ps", "top"])]
+    #[command(name = "process", alias = "prc", aliases = ["proc", "ps", "top"])]
     Process {
         /// Filter by process name or user
         filter: Option<String>,
@@ -235,7 +235,7 @@ enum Commands {
     },
 
     /// Smart project management, workspace scanner, and IDE selector
-    #[command(name = "project", alias = "prj")]
+    #[command(name = "project", alias = "prj", alias = "pro")]
     Project {
         /// Target project path or keyword ('.' for current directory)
         target: Option<String>,
@@ -274,52 +274,493 @@ fn main() {
     }
 }
 
-fn run_app() -> Result<()> {
-    let cli = Cli::parse();
-    let theme = custom_theme();
+#[derive(Clone, Copy)]
+struct CommandInfo {
+    name: &'static str,
+    alias_3: &'static str,
+    aliases: &'static [&'static str],
+    description: &'static str,
+}
 
-    match cli.command {
+const ALL_COMMANDS: &[CommandInfo] = &[
+    CommandInfo {
+        name: "project",
+        alias_3: "prj",
+        aliases: &["prj", "pro"],
+        description: "Scan workspace projects & open in IDE or terminal",
+    },
+    CommandInfo {
+        name: "develop",
+        alias_3: "dev",
+        aliases: &["dev"],
+        description: "Run active project development server",
+    },
+    CommandInfo {
+        name: "build",
+        alias_3: "bld",
+        aliases: &["bld"],
+        description: "Compile or build active project in release mode",
+    },
+    CommandInfo {
+        name: "go",
+        alias_3: "jmp",
+        aliases: &["jmp", "nav", "cd", "g"],
+        description: "Smart directory navigation, root/back, & folder picker",
+    },
+    CommandInfo {
+        name: "make",
+        alias_3: "mak",
+        aliases: &["mak", "mkdir", "touch"],
+        description: "Create folders or files directly or interactively",
+    },
+    CommandInfo {
+        name: "remove",
+        alias_3: "rmv",
+        aliases: &["rmv", "del", "dlt", "rm", "delete"],
+        description: "Safely delete files or directories with confirmation",
+    },
+    CommandInfo {
+        name: "copy",
+        alias_3: "cpy",
+        aliases: &["cpy", "cp"],
+        description: "Copy files or directory trees recursively",
+    },
+    CommandInfo {
+        name: "move",
+        alias_3: "mov",
+        aliases: &["mov", "mv"],
+        description: "Move or rename files and directories",
+    },
+    CommandInfo {
+        name: "list",
+        alias_3: "lst",
+        aliases: &["lst", "ls"],
+        description: "List directory contents with formatted sizes",
+    },
+    CommandInfo {
+        name: "path",
+        alias_3: "pth",
+        aliases: &["pth", "pwd"],
+        description: "Print or copy current working directory path",
+    },
+    CommandInfo {
+        name: "read",
+        alias_3: "red",
+        aliases: &["red", "cat"],
+        description: "Inspect file contents directly in terminal",
+    },
+    CommandInfo {
+        name: "find",
+        alias_3: "fnd",
+        aliases: &["fnd", "grep", "search"],
+        description: "Search pattern or text across files recursively",
+    },
+    CommandInfo {
+        name: "process",
+        alias_3: "prc",
+        aliases: &["prc", "proc", "ps", "top"],
+        description: "Inspect active processes or resource usage snapshot",
+    },
+    CommandInfo {
+        name: "kill",
+        alias_3: "kil",
+        aliases: &["kil", "stop", "stp"],
+        description: "Terminate process by PID or name with confirmation",
+    },
+    CommandInfo {
+        name: "port",
+        alias_3: "prt",
+        aliases: &["prt", "lsof"],
+        description: "Check active listening TCP ports and sockets",
+    },
+    CommandInfo {
+        name: "fetch",
+        alias_3: "fch",
+        aliases: &["fch", "get", "dwn", "curl", "wget"],
+        description: "Fetch HTTP response or download file with progress",
+    },
+    CommandInfo {
+        name: "disk",
+        alias_3: "dsk",
+        aliases: &["dsk", "df", "du"],
+        description: "Inspect disk free space or directory storage usage",
+    },
+    CommandInfo {
+        name: "pack",
+        alias_3: "pck",
+        aliases: &["pck", "tar", "zip"],
+        description: "Create compressed archive (.tar.gz or .zip)",
+    },
+    CommandInfo {
+        name: "unpack",
+        alias_3: "upk",
+        aliases: &["upk", "unzip", "untar"],
+        description: "Extract compressed archive (.zip or .tar.gz)",
+    },
+    CommandInfo {
+        name: "permit",
+        alias_3: "prm",
+        aliases: &["prm", "chmod"],
+        description: "Change file permissions with presets (755, 644, +x)",
+    },
+    CommandInfo {
+        name: "ping",
+        alias_3: "png",
+        aliases: &["png"],
+        description: "Test network host latency and connectivity",
+    },
+    CommandInfo {
+        name: "whoami",
+        alias_3: "who",
+        aliases: &["who", "user", "usr"],
+        description: "Display user identity, UID, GID, and hostname",
+    },
+    CommandInfo {
+        name: "time",
+        alias_3: "tim",
+        aliases: &["tim", "date", "dat"],
+        description: "Display current formatted date and time",
+    },
+    CommandInfo {
+        name: "history",
+        alias_3: "his",
+        aliases: &["his"],
+        description: "Display recent shell command history",
+    },
+    CommandInfo {
+        name: "which",
+        alias_3: "whc",
+        aliases: &["whc", "loc"],
+        description: "Locate executable binary in system PATH",
+    },
+    CommandInfo {
+        name: "environment",
+        alias_3: "env",
+        aliases: &["env"],
+        description: "Inspect or search environment variables",
+    },
+    CommandInfo {
+        name: "open",
+        alias_3: "opn",
+        aliases: &["opn"],
+        description: "Launch macOS application via open -a",
+    },
+    CommandInfo {
+        name: "clear",
+        alias_3: "clr",
+        aliases: &["clr"],
+        description: "Clear terminal screen viewport",
+    },
+    CommandInfo {
+        name: "init",
+        alias_3: "ini",
+        aliases: &["ini"],
+        description: "Generate shell integration wrapper for ~/.zshrc",
+    },
+    CommandInfo {
+        name: "help",
+        alias_3: "doc",
+        aliases: &["doc", "guide"],
+        description: "Display complete command reference & tutorial",
+    },
+];
+
+fn levenshtein_distance(a: &str, b: &str) -> usize {
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let m = a_chars.len();
+    let n = b_chars.len();
+
+    let mut dp = vec![vec![0; n + 1]; m + 1];
+
+    for (i, row) in dp.iter_mut().enumerate().take(m + 1) {
+        row[0] = i;
+    }
+    for (j, item) in dp[0].iter_mut().enumerate().take(n + 1) {
+        *item = j;
+    }
+
+    for i in 1..=m {
+        for j in 1..=n {
+            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
+            dp[i][j] = (dp[i - 1][j] + 1)
+                .min(dp[i][j - 1] + 1)
+                .min(dp[i - 1][j - 1] + cost);
+        }
+    }
+
+    dp[m][n]
+}
+
+fn resolve_command_args(theme: &ColorfulTheme, args: &[String]) -> Result<Option<Vec<String>>> {
+    let interactive = std::io::stdin().is_terminal() && std::env::var("RUN_TEST_NON_INTERACTIVE").is_err();
+    resolve_command_args_internal(theme, args, interactive)
+}
+
+fn resolve_command_args_internal(
+    theme: &ColorfulTheme,
+    args: &[String],
+    interactive: bool,
+) -> Result<Option<Vec<String>>> {
+    if args.len() <= 1 {
+        return Ok(Some(args.to_vec()));
+    }
+
+    let first = &args[1];
+    if first.starts_with('-') {
+        return Ok(Some(args.to_vec()));
+    }
+
+    let query = first.to_lowercase();
+
+    for cmd in ALL_COMMANDS {
+        if cmd.name == query || cmd.alias_3 == query || cmd.aliases.contains(&query.as_str()) {
+            let mut new_args = args.to_vec();
+            new_args[1] = cmd.name.to_string();
+            return Ok(Some(new_args));
+        }
+    }
+
+    if Cli::try_parse_from(args).is_ok() {
+        return Ok(Some(args.to_vec()));
+    }
+
+    let mut prefix_matches: Vec<&'static CommandInfo> = Vec::new();
+    for cmd in ALL_COMMANDS {
+        let matches_name = cmd.name.starts_with(&query);
+        let matches_alias = cmd.alias_3.starts_with(&query) || cmd.aliases.iter().any(|a| a.starts_with(&query));
+        if (matches_name || matches_alias) && !prefix_matches.iter().any(|m| m.name == cmd.name) {
+            prefix_matches.push(cmd);
+        }
+    }
+
+    if prefix_matches.len() == 1 {
+        let matched = prefix_matches[0];
+        let mut new_args = args.to_vec();
+        new_args[1] = matched.name.to_string();
+        return Ok(Some(new_args));
+    }
+
+    if prefix_matches.len() > 1 {
+        if !interactive {
+            let mut new_args = args.to_vec();
+            new_args[1] = prefix_matches[0].name.to_string();
+            return Ok(Some(new_args));
+        }
+
+        let mut menu_items: Vec<String> = prefix_matches
+            .iter()
+            .map(|cmd| {
+                let alias_display = if cmd.alias_3 != cmd.name {
+                    format!(" ({})", cmd.alias_3)
+                } else {
+                    String::new()
+                };
+                format!("{:<14}{:<8} {}", cmd.name, alias_display, cmd.description)
+            })
+            .collect();
+        menu_items.push("Cancel".to_string());
+
+        let prompt = format!("Multiple commands match '{}':", query);
+        let selection = Select::with_theme(theme)
+            .with_prompt(prompt)
+            .items(&menu_items)
+            .default(0)
+            .interact()?;
+
+        if selection >= prefix_matches.len() {
+            println!("Cancelled.");
+            return Ok(None);
+        }
+
+        let selected = prefix_matches[selection];
+        let mut new_args = args.to_vec();
+        new_args[1] = selected.name.to_string();
+        return Ok(Some(new_args));
+    }
+
+    let mut scored: Vec<(&'static CommandInfo, usize, bool)> = ALL_COMMANDS
+        .iter()
+        .map(|cmd| {
+            let dist_name = levenshtein_distance(&query, cmd.name);
+            let mut min_dist = dist_name;
+            let mut is_primary = true;
+
+            let dist_alias3 = levenshtein_distance(&query, cmd.alias_3);
+            if dist_alias3 < min_dist {
+                min_dist = dist_alias3;
+                is_primary = false;
+            }
+            for alias in cmd.aliases {
+                let d = levenshtein_distance(&query, alias);
+                if d < min_dist {
+                    min_dist = d;
+                    is_primary = false;
+                }
+            }
+            (cmd, min_dist, is_primary)
+        })
+        .collect();
+
+    // Sort by distance ascending, then prefer primary command names over aliases on ties
+    scored.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| b.2.cmp(&a.2)));
+
+    let max_allowed = if query.len() >= 6 { 3 } else { 2 };
+    let candidates: Vec<&'static CommandInfo> = scored
+        .into_iter()
+        .filter(|(_, dist, _)| *dist <= max_allowed)
+        .take(5)
+        .map(|(cmd, _, _)| cmd)
+        .collect();
+
+    if !candidates.is_empty() {
+        if !interactive {
+            let mut new_args = args.to_vec();
+            new_args[1] = candidates[0].name.to_string();
+            return Ok(Some(new_args));
+        }
+
+        let mut menu_items: Vec<String> = candidates
+            .iter()
+            .map(|cmd| {
+                let alias_display = if cmd.alias_3 != cmd.name {
+                    format!(" ({})", cmd.alias_3)
+                } else {
+                    String::new()
+                };
+                format!("{:<14}{:<8} {}", cmd.name, alias_display, cmd.description)
+            })
+            .collect();
+        menu_items.push("Cancel".to_string());
+
+        let prompt = format!("Unknown command '{}'. Did you mean:", query);
+        let selection = Select::with_theme(theme)
+            .with_prompt(prompt)
+            .items(&menu_items)
+            .default(0)
+            .interact()?;
+
+        if selection >= candidates.len() {
+            println!("Cancelled.");
+            return Ok(None);
+        }
+
+        let selected = candidates[selection];
+        let mut new_args = args.to_vec();
+        new_args[1] = selected.name.to_string();
+        return Ok(Some(new_args));
+    }
+
+    Ok(Some(args.to_vec()))
+}
+
+fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
+    let mut menu_items: Vec<String> = ALL_COMMANDS
+        .iter()
+        .map(|cmd| {
+            let alias_display = if cmd.alias_3 != cmd.name {
+                format!(" ({})", cmd.alias_3)
+            } else {
+                String::new()
+            };
+            format!("{:<14}{:<8} {}", cmd.name, alias_display, cmd.description)
+        })
+        .collect();
+    menu_items.push("Cancel".to_string());
+
+    let selection = Select::with_theme(theme)
+        .with_prompt("Select a command to run")
+        .items(&menu_items)
+        .default(0)
+        .interact()?;
+
+    if selection >= ALL_COMMANDS.len() {
+        println!("Cancelled.");
+        return Ok(());
+    }
+
+    let selected = ALL_COMMANDS[selection];
+    let new_args = vec!["run".to_string(), selected.name.to_string()];
+    let cli = Cli::try_parse_from(&new_args)?;
+    if let Some(cmd) = cli.command {
+        dispatch_command(theme, cmd)?;
+    }
+    Ok(())
+}
+
+fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
+    match command {
         Commands::Make {
             item,
             name,
             file,
             folder,
-        } => handle_make(&theme, item, name, file, folder),
-        Commands::Remove { target } => handle_del(&theme, target),
-        Commands::Open { target } => handle_open(&theme, target),
+        } => handle_make(theme, item, name, file, folder),
+        Commands::Remove { target } => handle_del(theme, target),
+        Commands::Open { target } => handle_open(theme, target),
         Commands::Copy {
             source,
             destination,
-        } => handle_copy(&theme, source, destination),
+        } => handle_copy(theme, source, destination),
         Commands::Move {
             source,
             destination,
-        } => handle_move(&theme, source, destination),
+        } => handle_move(theme, source, destination),
         Commands::Clear => clear_terminal(),
-        Commands::Go { target } => handle_go(&theme, target.as_deref()),
-        Commands::List { path, all, long } => commands::handle_list(&theme, path, all, long),
-        Commands::Path { interactive } => commands::handle_path(&theme, interactive),
-        Commands::Read { path } => commands::handle_read(&theme, path),
-        Commands::Find { pattern, path } => commands::handle_find(&theme, pattern, path),
+        Commands::Go { target } => handle_go(theme, target.as_deref()),
+        Commands::List { path, all, long } => commands::handle_list(theme, path, all, long),
+        Commands::Path { interactive } => commands::handle_path(theme, interactive),
+        Commands::Read { path } => commands::handle_read(theme, path),
+        Commands::Find { pattern, path } => commands::handle_find(theme, pattern, path),
         Commands::Process { filter, snapshot } => commands::handle_process(filter.as_deref(), snapshot),
-        Commands::Kill { target, force } => commands::handle_kill(&theme, target.as_deref(), force),
-        Commands::Port { port } => commands::handle_port(&theme, port.as_deref()),
-        Commands::Fetch { url, output, headers } => commands::handle_fetch(&theme, url.as_deref(), output, headers),
-        Commands::Disk { path, usage } => commands::handle_disk(&theme, path, usage),
-        Commands::Pack { archive, target } => commands::handle_pack(&theme, archive, target),
-        Commands::Unpack { archive, destination } => commands::handle_unpack(&theme, archive, destination),
-        Commands::Permit { mode, path } => commands::handle_permit(&theme, mode.as_deref(), path),
-        Commands::Ping { host } => commands::handle_ping(&theme, host.as_deref()),
+        Commands::Kill { target, force } => commands::handle_kill(theme, target.as_deref(), force),
+        Commands::Port { port } => commands::handle_port(theme, port.as_deref()),
+        Commands::Fetch { url, output, headers } => commands::handle_fetch(theme, url.as_deref(), output, headers),
+        Commands::Disk { path, usage } => commands::handle_disk(theme, path, usage),
+        Commands::Pack { archive, target } => commands::handle_pack(theme, archive, target),
+        Commands::Unpack { archive, destination } => commands::handle_unpack(theme, archive, destination),
+        Commands::Permit { mode, path } => commands::handle_permit(theme, mode.as_deref(), path),
+        Commands::Ping { host } => commands::handle_ping(theme, host.as_deref()),
         Commands::Whoami => commands::handle_whoami(),
         Commands::Time { format } => commands::handle_time(format.as_deref()),
         Commands::History { limit } => commands::handle_history(limit),
-        Commands::Which { binary } => commands::handle_which(&theme, binary.as_deref()),
+        Commands::Which { binary } => commands::handle_which(theme, binary.as_deref()),
         Commands::Env { key } => commands::handle_env(key.as_deref()),
-        Commands::Project { target } => handle_project(&theme, target.as_deref()),
+        Commands::Project { target } => handle_project(theme, target.as_deref()),
         Commands::Dev => handle_dev(),
         Commands::Build => handle_build(),
         Commands::Init => handle_init(),
         Commands::Help { command } => handle_help(command.as_deref()),
+    }
+}
+
+fn run_app() -> Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    let theme = custom_theme();
+
+    if args.len() <= 1 {
+        if std::io::stdin().is_terminal() {
+            return handle_all_commands_menu(&theme);
+        } else {
+            return handle_help(None);
+        }
+    }
+
+    let resolved_args = resolve_command_args(&theme, &args)?;
+    let Some(final_args) = resolved_args else {
+        return Ok(());
+    };
+
+    let cli = Cli::try_parse_from(&final_args)?;
+    match cli.command {
+        Some(command) => dispatch_command(&theme, command),
+        None => {
+            if std::io::stdin().is_terminal() {
+                handle_all_commands_menu(&theme)
+            } else {
+                handle_help(None)
+            }
+        }
     }
 }
 
@@ -1010,7 +1451,7 @@ fn scan_for_query(
 fn handle_init() -> Result<()> {
     println!(
         r#"run() {{
-    if [ "$1" = "go" ] || [ "$1" = "jmp" ] || [ "$1" = "nav" ] || [ "$1" = "cd" ] || [ "$1" = "project" ] || [ "$1" = "prj" ]; then
+    if [ "$1" = "go" ] || [ "$1" = "jmp" ] || [ "$1" = "nav" ] || [ "$1" = "cd" ] || [ "$1" = "g" ] || [ "$1" = "project" ] || [ "$1" = "prj" ] || [ "$1" = "pro" ]; then
         local target
         target="$(RUN_SHELL_RESOLVE=1 command run "$@")" || return $?
         if [ -n "$target" ] && [ -d "$target" ]; then
@@ -1863,288 +2304,350 @@ mod tests {
     }
 
     #[test]
+    fn test_levenshtein_distance() {
+        assert_eq!(levenshtein_distance("pak", "pack"), 1);
+        assert_eq!(levenshtein_distance("fethc", "fetch"), 2);
+        assert_eq!(levenshtein_distance("prject", "project"), 1);
+        assert_eq!(levenshtein_distance("same", "same"), 0);
+    }
+
+    #[test]
     fn test_cli_parsing_direct_and_aliases() {
+        assert!(matches!(
+            Cli::try_parse_from(["run"]),
+            Ok(Cli { command: None })
+        ));
+
         assert!(matches!(
             Cli::try_parse_from(["run", "mak", "folder", "my_folder"]),
             Ok(Cli {
-                command: Commands::Make {
+                command: Some(Commands::Make {
                     item: Some(ref item),
                     name: Some(name),
                     ..
-                }
+                })
             }) if item == "folder" && name == Path::new("my_folder")
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "make", "foo.txt"]),
             Ok(Cli {
-                command: Commands::Make {
+                command: Some(Commands::Make {
                     item: Some(ref item),
                     name: None,
                     ..
-                }
+                })
             }) if item == "foo.txt"
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "make"]),
             Ok(Cli {
-                command: Commands::Make {
+                command: Some(Commands::Make {
                     item: None,
                     name: None,
                     ..
-                }
+                })
             })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "opn", "Finder"]),
-            Ok(Cli { command: Commands::Open { target: Some(target) } }) if target == "Finder"
+            Ok(Cli { command: Some(Commands::Open { target: Some(target) }) }) if target == "Finder"
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "cpy", "a.txt", "b.txt"]),
-            Ok(Cli { command: Commands::Copy { .. } })
+            Ok(Cli { command: Some(Commands::Copy { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "mov", "a.txt", "b.txt"]),
-            Ok(Cli { command: Commands::Move { .. } })
+            Ok(Cli { command: Some(Commands::Move { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "dlt", "temp.txt"]),
-            Ok(Cli { command: Commands::Remove { .. } })
+            Ok(Cli { command: Some(Commands::Remove { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "clr"]),
-            Ok(Cli { command: Commands::Clear })
+            Ok(Cli { command: Some(Commands::Clear) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "help"]),
-            Ok(Cli { command: Commands::Help { command: None } })
+            Ok(Cli { command: Some(Commands::Help { command: None }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "guide", "make"]),
-            Ok(Cli { command: Commands::Help { command: Some(ref cmd) } }) if cmd == "make"
+            Ok(Cli { command: Some(Commands::Help { command: Some(ref cmd) }) }) if cmd == "make"
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "go", "root"]),
-            Ok(Cli { command: Commands::Go { target: Some(ref t) } }) if t == "root"
+            Ok(Cli { command: Some(Commands::Go { target: Some(ref t) }) }) if t == "root"
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "jmp", "back"]),
-            Ok(Cli { command: Commands::Go { target: Some(ref t) } }) if t == "back"
+            Ok(Cli { command: Some(Commands::Go { target: Some(ref t) }) }) if t == "back"
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "g", "root"]),
+            Ok(Cli { command: Some(Commands::Go { target: Some(ref t) }) }) if t == "root"
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "nav"]),
-            Ok(Cli { command: Commands::Go { target: None } })
+            Ok(Cli { command: Some(Commands::Go { target: None }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "ini"]),
-            Ok(Cli { command: Commands::Init })
+            Ok(Cli { command: Some(Commands::Init) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "project"]),
-            Ok(Cli { command: Commands::Project { target: None } })
+            Ok(Cli { command: Some(Commands::Project { target: None }) })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "pro"]),
+            Ok(Cli { command: Some(Commands::Project { target: None }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "prj", "."]),
-            Ok(Cli { command: Commands::Project { target: Some(ref t) } }) if t == "."
+            Ok(Cli { command: Some(Commands::Project { target: Some(ref t) }) }) if t == "."
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "dev"]),
-            Ok(Cli { command: Commands::Dev })
+            Ok(Cli { command: Some(Commands::Dev) })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "develop"]),
+            Ok(Cli { command: Some(Commands::Dev) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "build"]),
-            Ok(Cli { command: Commands::Build })
+            Ok(Cli { command: Some(Commands::Build) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "bld"]),
-            Ok(Cli { command: Commands::Build })
+            Ok(Cli { command: Some(Commands::Build) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "path"]),
-            Ok(Cli { command: Commands::Path { interactive: false } })
+            Ok(Cli { command: Some(Commands::Path { interactive: false }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "pth"]),
-            Ok(Cli { command: Commands::Path { interactive: false } })
+            Ok(Cli { command: Some(Commands::Path { interactive: false }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "pwd"]),
-            Ok(Cli { command: Commands::Path { interactive: false } })
+            Ok(Cli { command: Some(Commands::Path { interactive: false }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "list", "-a", "-l"]),
-            Ok(Cli { command: Commands::List { all: true, long: true, .. } })
+            Ok(Cli { command: Some(Commands::List { all: true, long: true, .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "lst"]),
-            Ok(Cli { command: Commands::List { .. } })
+            Ok(Cli { command: Some(Commands::List { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "ls"]),
-            Ok(Cli { command: Commands::List { .. } })
+            Ok(Cli { command: Some(Commands::List { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "cd", "root"]),
-            Ok(Cli { command: Commands::Go { target: Some(ref t) } }) if t == "root"
+            Ok(Cli { command: Some(Commands::Go { target: Some(ref t) }) }) if t == "root"
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "mkdir", "my_dir"]),
-            Ok(Cli { command: Commands::Make { .. } })
+            Ok(Cli { command: Some(Commands::Make { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "touch", "my_file"]),
-            Ok(Cli { command: Commands::Make { .. } })
+            Ok(Cli { command: Some(Commands::Make { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "cp", "a", "b"]),
-            Ok(Cli { command: Commands::Copy { .. } })
+            Ok(Cli { command: Some(Commands::Copy { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "mv", "a", "b"]),
-            Ok(Cli { command: Commands::Move { .. } })
+            Ok(Cli { command: Some(Commands::Move { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "remove", "dir"]),
-            Ok(Cli { command: Commands::Remove { .. } })
+            Ok(Cli { command: Some(Commands::Remove { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "rmv", "dir"]),
-            Ok(Cli { command: Commands::Remove { .. } })
+            Ok(Cli { command: Some(Commands::Remove { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "rm", "dir"]),
-            Ok(Cli { command: Commands::Remove { .. } })
+            Ok(Cli { command: Some(Commands::Remove { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "read", "file.txt"]),
-            Ok(Cli { command: Commands::Read { path: Some(_) } })
+            Ok(Cli { command: Some(Commands::Read { path: Some(_) }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "red", "file.txt"]),
-            Ok(Cli { command: Commands::Read { path: Some(_) } })
+            Ok(Cli { command: Some(Commands::Read { path: Some(_) }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "cat", "file.txt"]),
-            Ok(Cli { command: Commands::Read { path: Some(_) } })
+            Ok(Cli { command: Some(Commands::Read { path: Some(_) }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "find", "hello"]),
-            Ok(Cli { command: Commands::Find { pattern: Some(ref p), .. } }) if p == "hello"
+            Ok(Cli { command: Some(Commands::Find { pattern: Some(ref p), .. }) }) if p == "hello"
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "fnd", "hello"]),
-            Ok(Cli { command: Commands::Find { pattern: Some(ref p), .. } }) if p == "hello"
+            Ok(Cli { command: Some(Commands::Find { pattern: Some(ref p), .. }) }) if p == "hello"
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "grep", "hello"]),
-            Ok(Cli { command: Commands::Find { pattern: Some(ref p), .. } }) if p == "hello"
+            Ok(Cli { command: Some(Commands::Find { pattern: Some(ref p), .. }) }) if p == "hello"
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "process"]),
-            Ok(Cli { command: Commands::Process { .. } })
+            Ok(Cli { command: Some(Commands::Process { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "prc"]),
-            Ok(Cli { command: Commands::Process { .. } })
+            Ok(Cli { command: Some(Commands::Process { .. }) })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "proc"]),
+            Ok(Cli { command: Some(Commands::Process { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "kill", "1234"]),
-            Ok(Cli { command: Commands::Kill { .. } })
+            Ok(Cli { command: Some(Commands::Kill { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "kil", "1234"]),
-            Ok(Cli { command: Commands::Kill { .. } })
+            Ok(Cli { command: Some(Commands::Kill { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "port", "3000"]),
-            Ok(Cli { command: Commands::Port { .. } })
+            Ok(Cli { command: Some(Commands::Port { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "prt", "3000"]),
-            Ok(Cli { command: Commands::Port { .. } })
+            Ok(Cli { command: Some(Commands::Port { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "fetch", "https://example.com"]),
-            Ok(Cli { command: Commands::Fetch { .. } })
+            Ok(Cli { command: Some(Commands::Fetch { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "fch", "https://example.com"]),
-            Ok(Cli { command: Commands::Fetch { .. } })
+            Ok(Cli { command: Some(Commands::Fetch { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "disk"]),
-            Ok(Cli { command: Commands::Disk { .. } })
+            Ok(Cli { command: Some(Commands::Disk { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "dsk"]),
-            Ok(Cli { command: Commands::Disk { .. } })
+            Ok(Cli { command: Some(Commands::Disk { .. }) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "whoami"]),
-            Ok(Cli { command: Commands::Whoami })
+            Ok(Cli { command: Some(Commands::Whoami) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "who"]),
-            Ok(Cli { command: Commands::Whoami })
+            Ok(Cli { command: Some(Commands::Whoami) })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "which", "node"]),
-            Ok(Cli { command: Commands::Which { binary: Some(ref b) } }) if b == "node"
+            Ok(Cli { command: Some(Commands::Which { binary: Some(ref b) }) }) if b == "node"
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "whc", "node"]),
-            Ok(Cli { command: Commands::Which { binary: Some(ref b) } }) if b == "node"
+            Ok(Cli { command: Some(Commands::Which { binary: Some(ref b) }) }) if b == "node"
         ));
+    }
+
+    #[test]
+    fn test_resolve_command_args_smart_prefix_and_typo() {
+        let theme = custom_theme();
+
+        // Exact alias: pro -> project
+        let res = resolve_command_args_internal(&theme, &["run".into(), "pro".into()], false).unwrap();
+        assert_eq!(res, Some(vec!["run".to_string(), "project".to_string()]));
+
+        // Prefix match: proj -> project
+        let res = resolve_command_args_internal(&theme, &["run".into(), "proj".into()], false).unwrap();
+        assert_eq!(res, Some(vec!["run".to_string(), "project".to_string()]));
+
+        // Prefix match: proc -> process
+        let res = resolve_command_args_internal(&theme, &["run".into(), "proc".into()], false).unwrap();
+        assert_eq!(res, Some(vec!["run".to_string(), "process".to_string()]));
+
+        // Single letter prefix: g -> go
+        let res = resolve_command_args_internal(&theme, &["run".into(), "g".into()], false).unwrap();
+        assert_eq!(res, Some(vec!["run".to_string(), "go".to_string()]));
+
+        // Fuzzy / typo in non-interactive environment: pak -> pack
+        let res = resolve_command_args_internal(&theme, &["run".into(), "pak".into()], false).unwrap();
+        assert_eq!(res, Some(vec!["run".to_string(), "pack".to_string()]));
+
+        // Fuzzy / typo in non-interactive environment: fethc -> fetch
+        let res = resolve_command_args_internal(&theme, &["run".into(), "fethc".into()], false).unwrap();
+        assert_eq!(res, Some(vec!["run".to_string(), "fetch".to_string()]));
     }
 }

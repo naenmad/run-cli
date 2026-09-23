@@ -41,6 +41,35 @@
 
 ---
 
+## Smart Interaction, Prefix Matching & Anti-Typo
+
+`run` is designed to delight users with effortless and fast interactions:
+
+1. **Bare `run` Fallback Menu:**
+   - Running `run` without any arguments automatically displays an interactive selection menu listing all available commands and their 3-letter aliases with descriptions.
+   - Selecting any command seamlessly launches into its interactive mode.
+   - The last option is always `Cancel`.
+
+2. **Smart Prefix Matching:**
+   - Type faster with unique prefixes:
+     - `run pro` or `run proj` immediately executes `run project`.
+     - `run proc` immediately executes `run process`.
+     - `run cl` immediately executes `run clear`.
+     - `run g` immediately executes `run go`.
+
+3. **Ambiguous Prefix Disambiguation:**
+   - If multiple commands share a prefix, `run` opens an interactive disambiguation menu:
+     - `run p` lists `pack`, `path`, `permit`, `ping`, `port`, `process`, `project`, and `Cancel`.
+     - `run m` lists `make`, `move`, and `Cancel`.
+     - `run f` lists `fetch`, `find`, and `Cancel`.
+   - Arguments passed after the prefix are preserved (e.g. `run p 3000` -> pick `port` -> executes `run port 3000`).
+
+4. **Anti-Typo Fuzzy Suggestions:**
+   - If a typo is entered (e.g. `run pak` or `run fethc`), `run` calculates Levenshtein distance against command names and aliases.
+   - It presents a "Did you mean:" menu with the closest matches ordered by relevance, plus `Cancel`.
+
+---
+
 ## Cancellation Standard
 
 All interactive prompts and menus adhere to a strict cancellation standard:
