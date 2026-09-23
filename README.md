@@ -37,8 +37,7 @@ Standard Unix commands are cryptic and filled with archaic flags (`lsof -iTCP -s
 ### Option 1: Install via Homebrew (Recommended)
 
 ```bash
-brew tap naenmad/tap
-brew install run
+brew install naenmad/run-cli/run
 ```
 
 ### Option 2: Install via Cargo
