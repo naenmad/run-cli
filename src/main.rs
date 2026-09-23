@@ -12,6 +12,7 @@ use dialoguer::{Confirm, FuzzySelect, Input, Select};
 mod commands;
 mod completion;
 mod config;
+mod mac;
 mod ui;
 
 use ui::RunTheme as ColorfulTheme;
@@ -145,11 +146,14 @@ enum Commands {
         force: bool,
     },
 
-    /// Inspect active network ports and listening sockets
-    #[command(name = "port", alias = "prt", alias = "lsof")]
+    /// Inspect active network ports, listening sockets, or terminate conflicting processes
+    #[command(name = "port", alias = "prt", alias = "lsof", alias = "killport")]
     Port {
         /// Port to query (e.g. 3000, 8080)
         port: Option<String>,
+        /// Terminate process listening on the port
+        #[arg(short = 'k', long)]
+        kill: bool,
     },
 
     /// Fetch URL response or download file locally
@@ -352,6 +356,141 @@ enum Commands {
         key: Option<String>,
         /// Configuration value to set
         val: Option<String>,
+    },
+
+    /// Manage custom developer command shortcuts and aliases
+    #[command(name = "alias", alias = "als")]
+    Alias {
+        /// Subaction: list, add, or rm
+        action: Option<String>,
+        /// Alias trigger name (for add or rm)
+        name: Option<String>,
+        /// Target command to execute (for add)
+        target: Option<String>,
+    },
+
+    /// Display command execution analytics and productivity stats
+    #[command(name = "stats", alias = "sts")]
+    Stats,
+
+    /// Manage Wi-Fi connection, scan networks, connect, or show saved passwords
+    #[command(name = "wifi", alias = "wif")]
+    Wifi {
+        /// Subaction: status, scan, connect, pass, on, or off
+        action: Option<String>,
+        /// Network SSID or target parameter
+        arg1: Option<String>,
+        /// Password or secondary parameter
+        arg2: Option<String>,
+    },
+
+    /// Manage Bluetooth controller and paired devices
+    #[command(name = "bluetooth", alias = "blt", alias = "bt", alias = "blue")]
+    Bluetooth {
+        /// Subaction: status, on, off
+        action: Option<String>,
+    },
+
+    /// Quick connect paired AirPods or Bluetooth headphones
+    #[command(name = "airpods", alias = "pod", alias = "pods")]
+    Airpods,
+
+    /// Open AirDrop or share file directly via native macOS Share Sheet
+    #[command(name = "airdrop", alias = "drp", alias = "drop")]
+    Airdrop {
+        /// Optional path to file to share via AirDrop
+        file: Option<PathBuf>,
+    },
+
+    /// Control Apple Music / Spotify playback and track information
+    #[command(name = "music", alias = "msc")]
+    Music {
+        /// Action: play, pause, next, prev, or open
+        action: Option<String>,
+    },
+
+    /// Inspect or adjust system audio volume level (0-100%, mute/unmute)
+    #[command(name = "volume", alias = "vol")]
+    Volume {
+        /// Volume level 0-100 or 'mute'/'unmute'
+        level: Option<String>,
+    },
+
+    /// Quick note saver and launcher for Apple Notes
+    #[command(name = "note", alias = "not", alias = "notes")]
+    Note {
+        /// Note text content to save
+        text: Option<String>,
+    },
+
+    /// Fix Gatekeeper quarantine ("App is damaged and can't be opened")
+    #[command(name = "fixapp", alias = "fix", alias = "xattr")]
+    Fixapp {
+        /// Application name or path to .app bundle
+        app: Option<String>,
+    },
+
+    /// Inspect detailed battery health, charging status, and cycle count
+    #[command(name = "battery", alias = "bat", alias = "batt")]
+    Battery,
+
+    /// Keep Mac awake and prevent display/system sleep (caffeinate wrapper)
+    #[command(name = "awake", alias = "caf", alias = "caffeinate")]
+    Awake {
+        /// Duration in minutes to stay awake
+        minutes: Option<u64>,
+    },
+
+    /// QuickLook preview any document, image, or media file
+    #[command(name = "peek", alias = "pek", alias = "ql")]
+    Peek {
+        /// Path of file to preview
+        file: Option<PathBuf>,
+    },
+
+    /// Inspect macOS Trash storage usage or empty trash safely
+    #[command(name = "trash", alias = "tsh")]
+    Trash {
+        /// Action: empty or list
+        action: Option<String>,
+    },
+
+    /// Take screenshot of screen selection or window directly to clipboard
+    #[command(name = "shot", alias = "snt", alias = "snip")]
+    Shot {
+        /// Capture mode: selection, window, or full
+        mode: Option<String>,
+    },
+
+    /// Dispatch native macOS notification banner with sound
+    #[command(name = "notify", alias = "ntf", alias = "alert")]
+    Notify {
+        /// Notification title
+        title: Option<String>,
+        /// Notification message body
+        message: Option<String>,
+    },
+
+    /// Toggle or set macOS Dark Mode
+    #[command(name = "dark", alias = "drk")]
+    Dark {
+        /// Explicit mode: on or off
+        mode: Option<String>,
+    },
+
+    /// Set macOS Light Mode
+    #[command(name = "light", alias = "lit")]
+    Light,
+
+    /// Immediately lock macOS screen
+    #[command(name = "lock", alias = "lok")]
+    Lock,
+
+    /// Hide or show desktop icons for clean presentations
+    #[command(name = "desktop", alias = "dkt", alias = "desk")]
+    Desktop {
+        /// Mode: hide or show
+        action: Option<String>,
     },
 
     /// Display complete command reference and usage tutorial
@@ -635,6 +774,126 @@ const ALL_COMMANDS: &[CommandInfo] = &[
         description: "Manage CLI settings, primary color, editor & auto-clear",
     },
     CommandInfo {
+        name: "alias",
+        alias_3: "als",
+        aliases: &["als", "shortcut"],
+        description: "Manage custom developer command shortcuts & aliases",
+    },
+    CommandInfo {
+        name: "stats",
+        alias_3: "sts",
+        aliases: &["sts", "analytics", "usage"],
+        description: "Display command execution analytics & productivity stats",
+    },
+    CommandInfo {
+        name: "wifi",
+        alias_3: "wif",
+        aliases: &["wif", "wlan"],
+        description: "Manage Wi-Fi network, scan, connect & show passwords",
+    },
+    CommandInfo {
+        name: "bluetooth",
+        alias_3: "blt",
+        aliases: &["blt", "bt", "blue"],
+        description: "Manage Bluetooth controller & connected peripherals",
+    },
+    CommandInfo {
+        name: "airpods",
+        alias_3: "pod",
+        aliases: &["pod", "pods"],
+        description: "Quick connect paired AirPods or Bluetooth headphones",
+    },
+    CommandInfo {
+        name: "airdrop",
+        alias_3: "drp",
+        aliases: &["drp", "drop"],
+        description: "Open AirDrop or share file via native Share Sheet",
+    },
+    CommandInfo {
+        name: "music",
+        alias_3: "msc",
+        aliases: &["msc", "spotify"],
+        description: "Control Apple Music / Spotify player and track info",
+    },
+    CommandInfo {
+        name: "volume",
+        alias_3: "vol",
+        aliases: &["vol", "sound"],
+        description: "Inspect or set system audio volume level & mute",
+    },
+    CommandInfo {
+        name: "note",
+        alias_3: "not",
+        aliases: &["not", "notes"],
+        description: "Quick note scratchpad directly into Apple Notes",
+    },
+    CommandInfo {
+        name: "fixapp",
+        alias_3: "fix",
+        aliases: &["fix", "xattr"],
+        description: "Fix Gatekeeper quarantine ('App is damaged and can't be opened')",
+    },
+    CommandInfo {
+        name: "battery",
+        alias_3: "bat",
+        aliases: &["bat", "batt"],
+        description: "Inspect battery health, charger wattage & cycle count",
+    },
+    CommandInfo {
+        name: "awake",
+        alias_3: "caf",
+        aliases: &["caf", "caffeinate"],
+        description: "Keep Mac awake and prevent display/system sleep",
+    },
+    CommandInfo {
+        name: "peek",
+        alias_3: "pek",
+        aliases: &["pek", "ql", "quicklook"],
+        description: "Launch macOS QuickLook popup for any file",
+    },
+    CommandInfo {
+        name: "trash",
+        alias_3: "tsh",
+        aliases: &["tsh"],
+        description: "Inspect Trash disk usage or safely empty trash",
+    },
+    CommandInfo {
+        name: "shot",
+        alias_3: "snt",
+        aliases: &["snt", "snip", "screenshot"],
+        description: "Capture screen selection or window to clipboard",
+    },
+    CommandInfo {
+        name: "notify",
+        alias_3: "ntf",
+        aliases: &["ntf", "alert"],
+        description: "Send native macOS notification banner with sound",
+    },
+    CommandInfo {
+        name: "dark",
+        alias_3: "drk",
+        aliases: &["drk"],
+        description: "Toggle or set macOS Dark Mode",
+    },
+    CommandInfo {
+        name: "light",
+        alias_3: "lit",
+        aliases: &["lit"],
+        description: "Set macOS Light Mode",
+    },
+    CommandInfo {
+        name: "lock",
+        alias_3: "lok",
+        aliases: &["lok"],
+        description: "Lock macOS screen immediately",
+    },
+    CommandInfo {
+        name: "desktop",
+        alias_3: "dkt",
+        aliases: &["dkt", "desk"],
+        description: "Hide or show desktop icons for clean presentations",
+    },
+    CommandInfo {
         name: "help",
         alias_3: "doc",
         aliases: &["doc", "guide"],
@@ -705,6 +964,30 @@ fn resolve_command_args_internal(
 
     if Cli::try_parse_from(args).is_ok() {
         return Ok(Some(args.to_vec()));
+    }
+
+    let custom_aliases = config::get_aliases();
+    if let Some(target_cmd) = custom_aliases.get(&query) {
+        let remainder = if args.len() > 2 {
+            format!(" {}", args[2..].join(" "))
+        } else {
+            String::new()
+        };
+        let full_cmd = format!("{}{}", target_cmd, remainder);
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+        let status = Command::new(shell).arg("-c").arg(&full_cmd).status();
+        config::record_command_stat(&format!("alias:{}", query));
+        match status {
+            Ok(st) => {
+                if !st.success() {
+                    std::process::exit(st.code().unwrap_or(1));
+                }
+                return Ok(None);
+            }
+            Err(e) => {
+                bail!("failed to execute alias '{}': {}", query, e);
+            }
+        }
     }
 
     let mut prefix_matches: Vec<&'static CommandInfo> = Vec::new();
@@ -843,11 +1126,12 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
     ui::render_breadcrumbs(&["run", "Launcher Dashboard"]);
 
     let categories = [
-        "🛠️   Developer & Workspace  (project, dev, build, docker, config...)",
-        "📂  Filesystem & Navigation (go, list, make, memo, read, find...)",
-        "⚙️   System & Monitoring     (process, kill, disk, whoami, time...)",
-        "🌐  Network & Utilities     (port, fetch, speedtest, completion...)",
-        "🔍  Search All 41 Commands... (search as you type)",
+        "🛠️   Developer & Workspace  (project, dev, build, docker, config, alias...)",
+        "🍏  macOS Native Suite      (wifi, bt, airdrop, music, vol, note, fixapp...)",
+        "📂  Filesystem & Navigation (go, list, make, memo, read, find, trash...)",
+        "⚙️   System & Monitoring     (battery, awake, process, kill, disk, whoami...)",
+        "🌐  Network & Utilities     (port, fetch, speedtest, notify, shot...)",
+        "🔍  Search All Commands...  (search as you type)",
     ];
     let cancel_btn = cancel_option();
     let mut dashboard_options: Vec<String> = categories.iter().map(|s| s.to_string()).collect();
@@ -872,7 +1156,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .filter(|c| {
                 [
                     "project", "dev", "build", "test", "clean", "sync", "network", "share",
-                    "bench", "docker", "secret", "config",
+                    "bench", "docker", "secret", "config", "alias", "stats",
                 ]
                 .contains(&c.name)
             })
@@ -882,8 +1166,9 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .copied()
             .filter(|c| {
                 [
-                    "go", "path", "list", "make", "remove", "copy", "move", "read", "find",
-                    "permit", "memo",
+                    "wifi", "bluetooth", "airpods", "airdrop", "music", "volume", "note",
+                    "fixapp", "battery", "awake", "peek", "trash", "shot", "notify", "dark",
+                    "light", "lock", "desktop",
                 ]
                 .contains(&c.name)
             })
@@ -893,7 +1178,8 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .copied()
             .filter(|c| {
                 [
-                    "process", "kill", "disk", "whoami", "time", "history", "which", "env",
+                    "go", "path", "list", "make", "remove", "copy", "move", "read", "find",
+                    "permit", "memo", "trash", "peek",
                 ]
                 .contains(&c.name)
             })
@@ -903,18 +1189,24 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .copied()
             .filter(|c| {
                 [
-                    "port",
-                    "fetch",
-                    "ping",
-                    "pack",
-                    "unpack",
-                    "speedtest",
-                    "completion",
+                    "battery", "awake", "process", "kill", "disk", "whoami", "time", "history",
+                    "which", "env", "lock", "dark", "light",
                 ]
                 .contains(&c.name)
             })
             .collect(),
-        4 => ALL_COMMANDS.to_vec(),
+        4 => ALL_COMMANDS
+            .iter()
+            .copied()
+            .filter(|c| {
+                [
+                    "wifi", "bluetooth", "airpods", "airdrop", "port", "fetch", "ping", "pack",
+                    "unpack", "speedtest", "notify", "shot", "completion",
+                ]
+                .contains(&c.name)
+            })
+            .collect(),
+        5 => ALL_COMMANDS.to_vec(),
         _ => return Ok(()),
     };
 
@@ -987,7 +1279,7 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
             commands::handle_process(filter.as_deref(), snapshot)
         }
         Commands::Kill { target, force } => commands::handle_kill(theme, target.as_deref(), force),
-        Commands::Port { port } => commands::handle_port(theme, port.as_deref()),
+        Commands::Port { port, kill } => commands::handle_port(theme, port.as_deref(), kill),
         Commands::Fetch {
             url,
             output,
@@ -1025,7 +1317,37 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
         Commands::Config { action, key, val } => {
             commands::handle_config(theme, action.as_deref(), key.as_deref(), val.as_deref())
         }
+        Commands::Alias {
+            action,
+            name,
+            target,
+        } => commands::handle_alias(theme, action.as_deref(), name.as_deref(), target.as_deref()),
+        Commands::Stats => commands::handle_stats(theme),
         Commands::Init => handle_init(),
+        Commands::Wifi {
+            action,
+            arg1,
+            arg2,
+        } => mac::handle_wifi(theme, action.as_deref(), arg1.as_deref(), arg2.as_deref()),
+        Commands::Bluetooth { action } => mac::handle_bluetooth(theme, action.as_deref()),
+        Commands::Airpods => mac::handle_airpods(theme),
+        Commands::Airdrop { file } => mac::handle_airdrop(theme, file),
+        Commands::Music { action } => mac::handle_music(theme, action.as_deref()),
+        Commands::Volume { level } => mac::handle_volume(theme, level.as_deref()),
+        Commands::Note { text } => mac::handle_note(theme, text.as_deref()),
+        Commands::Fixapp { app } => mac::handle_fixapp(theme, app.as_deref()),
+        Commands::Battery => mac::handle_battery(theme),
+        Commands::Awake { minutes } => mac::handle_awake(theme, minutes),
+        Commands::Peek { file } => mac::handle_peek(theme, file),
+        Commands::Trash { action } => mac::handle_trash(theme, action.as_deref()),
+        Commands::Shot { mode } => mac::handle_shot(theme, mode.as_deref()),
+        Commands::Notify { title, message } => {
+            mac::handle_notify(theme, title.as_deref(), message.as_deref())
+        }
+        Commands::Dark { mode } => mac::handle_dark(theme, mode.as_deref()),
+        Commands::Light => mac::handle_light(theme),
+        Commands::Lock => mac::handle_lock(),
+        Commands::Desktop { action } => mac::handle_desktop(theme, action.as_deref()),
         Commands::Help { command } => handle_help(command.as_deref()),
     }
 }
@@ -1054,7 +1376,74 @@ fn run_app() -> Result<()> {
         Err(err) => err.exit(),
     };
     match cli.command {
-        Some(command) => dispatch_command(&theme, command),
+        Some(command) => {
+            let cmd_name = match &command {
+                Commands::Make { .. } => "make",
+                Commands::Remove { .. } => "remove",
+                Commands::Open { .. } => "open",
+                Commands::Copy { .. } => "copy",
+                Commands::Move { .. } => "move",
+                Commands::Clear => "clear",
+                Commands::Go { .. } => "go",
+                Commands::List { .. } => "list",
+                Commands::Path { .. } => "path",
+                Commands::Read { .. } => "read",
+                Commands::Find { .. } => "find",
+                Commands::Process { .. } => "process",
+                Commands::Kill { .. } => "kill",
+                Commands::Port { .. } => "port",
+                Commands::Fetch { .. } => "fetch",
+                Commands::Disk { .. } => "disk",
+                Commands::Pack { .. } => "pack",
+                Commands::Unpack { .. } => "unpack",
+                Commands::Permit { .. } => "permit",
+                Commands::Ping { .. } => "ping",
+                Commands::Whoami => "whoami",
+                Commands::Time { .. } => "time",
+                Commands::History { .. } => "history",
+                Commands::Which { .. } => "which",
+                Commands::Env { .. } => "env",
+                Commands::Project { .. } => "project",
+                Commands::Dev => "develop",
+                Commands::Build => "build",
+                Commands::Test => "test",
+                Commands::Clean { .. } => "clean",
+                Commands::Sync { .. } => "sync",
+                Commands::Network => "network",
+                Commands::Share { .. } => "share",
+                Commands::Bench { .. } => "bench",
+                Commands::Speedtest { .. } => "speedtest",
+                Commands::Docker => "docker",
+                Commands::Secret { .. } => "secret",
+                Commands::Memo { .. } => "memo",
+                Commands::Completion { .. } => "completion",
+                Commands::Config { .. } => "config",
+                Commands::Alias { .. } => "alias",
+                Commands::Stats => "stats",
+                Commands::Init => "init",
+                Commands::Wifi { .. } => "wifi",
+                Commands::Bluetooth { .. } => "bluetooth",
+                Commands::Airpods => "airpods",
+                Commands::Airdrop { .. } => "airdrop",
+                Commands::Music { .. } => "music",
+                Commands::Volume { .. } => "volume",
+                Commands::Note { .. } => "note",
+                Commands::Fixapp { .. } => "fixapp",
+                Commands::Battery => "battery",
+                Commands::Awake { .. } => "awake",
+                Commands::Peek { .. } => "peek",
+                Commands::Trash { .. } => "trash",
+                Commands::Shot { .. } => "shot",
+                Commands::Notify { .. } => "notify",
+                Commands::Dark { .. } => "dark",
+                Commands::Light => "light",
+                Commands::Lock => "lock",
+                Commands::Desktop { .. } => "desktop",
+                Commands::Help { .. } => "help",
+            };
+            config::record_command_stat(cmd_name);
+            dispatch_command(&theme, command)
+        }
         None => {
             if std::io::stdin().is_terminal() {
                 handle_all_commands_menu(&theme)
@@ -3804,6 +4193,126 @@ mod tests {
             Ok(Cli {
                 command: Some(Commands::Config { ref action, ref key, ref val })
             }) if action.as_deref() == Some("set") && key.as_deref() == Some("primary_color") && val.as_deref() == Some("#ff007f")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "port", "8000", "-k"]),
+            Ok(Cli {
+                command: Some(Commands::Port { ref port, kill: true })
+            }) if port.as_deref() == Some("8000")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "alias", "add", "c", "cargo check"]),
+            Ok(Cli {
+                command: Some(Commands::Alias { ref action, ref name, ref target })
+            }) if action.as_deref() == Some("add") && name.as_deref() == Some("c") && target.as_deref() == Some("cargo check")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "stats"]),
+            Ok(Cli {
+                command: Some(Commands::Stats)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "sts"]),
+            Ok(Cli {
+                command: Some(Commands::Stats)
+            })
+        ));
+
+        // macOS Native Suite tests
+        assert!(matches!(
+            Cli::try_parse_from(["run", "wifi", "connect", "MyHome", "Secret123"]),
+            Ok(Cli {
+                command: Some(Commands::Wifi { ref action, ref arg1, ref arg2 })
+            }) if action.as_deref() == Some("connect") && arg1.as_deref() == Some("MyHome") && arg2.as_deref() == Some("Secret123")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "wif"]),
+            Ok(Cli {
+                command: Some(Commands::Wifi { action: None, arg1: None, arg2: None })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "vol", "75"]),
+            Ok(Cli {
+                command: Some(Commands::Volume { ref level })
+            }) if level.as_deref() == Some("75")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "fixapp", "Figma"]),
+            Ok(Cli {
+                command: Some(Commands::Fixapp { ref app })
+            }) if app.as_deref() == Some("Figma")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "fix"]),
+            Ok(Cli {
+                command: Some(Commands::Fixapp { app: None })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "awake", "60"]),
+            Ok(Cli {
+                command: Some(Commands::Awake { minutes: Some(60) })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "caf"]),
+            Ok(Cli {
+                command: Some(Commands::Awake { minutes: None })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "dark"]),
+            Ok(Cli {
+                command: Some(Commands::Dark { mode: None })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "drk", "on"]),
+            Ok(Cli {
+                command: Some(Commands::Dark { ref mode })
+            }) if mode.as_deref() == Some("on")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "desk", "hide"]),
+            Ok(Cli {
+                command: Some(Commands::Desktop { ref action })
+            }) if action.as_deref() == Some("hide")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "dkt"]),
+            Ok(Cli {
+                command: Some(Commands::Desktop { action: None })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "pods"]),
+            Ok(Cli {
+                command: Some(Commands::Airpods)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "bat"]),
+            Ok(Cli {
+                command: Some(Commands::Battery)
+            })
         ));
     }
 

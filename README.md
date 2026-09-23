@@ -123,7 +123,29 @@ custom_hubs = [
 
 ## 🎯 Command Cheatsheet
 
-`run` includes **41 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
+`run` includes **61 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
+
+### 🍏 macOS Native Interaction Suite (Dual-Mode: Direct & Interactive)
+| Command | Alias | Additional Aliases | Purpose & Highlights |
+| :--- | :--- | :--- | :--- |
+| `wifi` | `wif` | - | Manage Wi-Fi, scan nearby networks, connect, toggle power, or view Keychain passwords (`run wifi`, `run wif scan`, `run wif pass`) |
+| `bluetooth` | `blt` | `bt`, `blue` | Inspect Bluetooth controller state & connected peripherals (`run bt`, `run bt on`) |
+| `airpods` | `pod` | `pods` | One-click connect paired AirPods or Bluetooth headphones (`run pods`) |
+| `airdrop` | `drp` | `drop` | Open AirDrop finder window or share files via native macOS Share Sheet (`run drop [file]`) |
+| `music` | `msc` | `spotify` | Apple Music & Spotify player control (`play`, `pause`, `next`, `prev`) and track HUD (`run music`) |
+| `volume` | `vol` | `sound` | Audio volume HUD & slider (0-100%, mute/unmute) (`run vol 50`, `run vol mute`) |
+| `note` | `not` | `notes` | Quick scratchpad saver directly into Apple Notes (`run note "Idea"`, `run note`) |
+| `fixapp` | `fix` | `xattr` | Fix Gatekeeper quarantine ("App is damaged and can't be opened") with fuzzy app selector (`run fixapp Figma`, `run fix`) |
+| `battery` | `bat` | `batt` | Detailed battery health, cycle count, max capacity %, and charger wattage (`run bat`) |
+| `awake` | `caf` | `caffeinate` | Keep Mac awake and prevent display/system sleep with countdown timer (`run awake 60`, `run caf`) |
+| `peek` | `pek` | `ql`, `quicklook` | Launch native macOS QuickLook preview popup for any document or image (`run peek image.png`) |
+| `trash` | `tsh` | - | Inspect Trash disk usage or safely empty trash (`run trash`, `run tsh empty`) |
+| `shot` | `snt` | `snip`, `screenshot` | Capture screen selection or window directly to clipboard (`run shot`, `run snip window`) |
+| `notify` | `ntf` | `alert` | Dispatch native macOS notification banner with sound (`run notify "Build" "Finished"`) |
+| `dark` | `drk` | - | Toggle or set macOS Dark Mode (`run dark`, `run drk on`) |
+| `light` | `lit` | - | Set macOS Light Mode (`run light`) |
+| `lock` | `lok` | - | Lock macOS screen immediately (`run lock`) |
+| `desktop` | `dkt` | `desk` | Hide or show desktop icons for clean presentations (`run desk hide`, `run desk show`) |
 
 ### 🛠️ Developer & Workspace Suite
 | Command | Alias | Purpose & Highlights |
@@ -137,6 +159,8 @@ custom_hubs = [
 | `docker` | `dck` | Inspect and manage Docker/OrbStack containers, view logs, start or stop |
 | `secret` | `sec`, `dotenv` | Audit local `.env` against `.env.example` and generate sanitized templates (`--fix`) |
 | `config` | `cfg` | Manage CLI settings, custom primary colors, editor & auto-clear (`run cfg`) |
+| `alias` | `als`, `shortcut` | Define custom command shortcuts (`run alias add c "cargo check"`) with execution fallback |
+| `stats` | `sts`, `analytics` | Terminal usage analytics dashboard with visual frequency bars (`run stats`) |
 | `network` | `net`, `ip` | Inspects local LAN (en0/en1) and public WAN IP with interactive clipboard copy |
 | `share` | `shr` | Instant local HTTP file server on LAN (`run share -p 8080`) |
 | `bench` | `bnc` | Microsecond-precision command execution benchmark timer |
@@ -162,7 +186,7 @@ custom_hubs = [
 | `process` | `prc` | `ps`, `top` | List active processes or view system resource snapshot (CPU & Memory) |
 | `kill` | `kil` | `stop`, `stp` | Terminate process by PID or name with safe confirmation |
 | `disk` | `dsk` | `df`, `du` | Mounted volume free space or interactive directory disk usage selector |
-| `port` | `prt` | `lsof` | Inspect active TCP listening ports and associated processes |
+| `port` | `prt`, `killport` | `lsof` | Inspect active TCP listening ports, detect conflicts, or kill blocking processes (`run port 8000 -k`) |
 | `whoami` | `who` | `user` | Display user identity, UID, GID, and system hostname |
 | `time` | `tim` | `date` | Formatted current date and time |
 | `history` | `his` | - | Display recent shell command history |

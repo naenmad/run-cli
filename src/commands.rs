@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -360,47 +360,7 @@ pub fn handle_kill(theme: &ColorfulTheme, target: Option<&str>, force: bool) -> 
     Ok(())
 }
 
-/// port (alias: prt, lsof) - Inspect active network ports and listening sockets
-pub fn handle_port(theme: &ColorfulTheme, port: Option<&str>) -> Result<()> {
-    let mut cmd = Command::new("lsof");
 
-    match port {
-        Some(p) => {
-            let port_clean = p.trim_start_matches(':');
-            cmd.arg(format!("-i:{port_clean}"));
-            println!(
-                "{}",
-                format!("Searching processes using port :{port_clean}...").dimmed()
-            );
-        }
-        None => {
-            let input: String = Input::with_theme(theme)
-                .with_prompt("Port to inspect (leave blank to list all listening TCP ports)")
-                .allow_empty(true)
-                .interact_text()?;
-
-            let trimmed = input.trim();
-            if trimmed.is_empty() {
-                cmd.args(["-iTCP", "-sTCP:LISTEN", "-P", "-n"]);
-                println!("{}", "Listing all active listening ports...".dimmed());
-            } else {
-                let port_clean = trimmed.trim_start_matches(':');
-                cmd.arg(format!("-i:{port_clean}"));
-                println!(
-                    "{}",
-                    format!("Searching processes on port :{port_clean}...").dimmed()
-                );
-            }
-        }
-    }
-
-    let status = cmd.status().context("failed to run lsof")?;
-    if !status.success() && status.code() != Some(1) {
-        bail!("port inspection failed");
-    }
-
-    Ok(())
-}
 
 /// fetch (alias: fch, get, curl, wget) - Fetch HTTP response or download file locally
 pub fn handle_fetch(
@@ -2870,3 +2830,424 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
 
     Ok(())
 }
+
+#[derive(Debug, Clone)]
+struct PortProcess {
+    command: String,
+    pid: u32,
+    user: String,
+    port: u16,
+    name: String,
+}
+
+fn scan_listening_ports() -> Vec<PortProcess> {
+    let output = Command::new("lsof")
+        .args(["-iTCP", "-sTCP:LISTEN", "-P", "-n"])
+        .output();
+
+    let Ok(out) = output else {
+        return Vec::new();
+    };
+
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut results = Vec::new();
+
+    for line in text.lines().skip(1) {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 9 {
+            continue;
+        }
+
+        let cmd = parts[0].to_string();
+        let Ok(pid) = parts[1].parse::<u32>() else {
+            continue;
+        };
+        let user = parts[2].to_string();
+        let name = parts[8].to_string();
+
+        // Extract port from NAME (e.g., "*:8000" or "127.0.0.1:3000")
+        if let Some(pos) = name.rfind(':') {
+            let port_str = &name[pos + 1..];
+            if let Ok(port) = port_str.parse::<u16>() {
+                results.push(PortProcess {
+                    command: cmd,
+                    pid,
+                    user,
+                    port,
+                    name,
+                });
+            }
+        }
+    }
+
+    results.sort_by_key(|p| p.port);
+    results.dedup_by_key(|p| (p.port, p.pid));
+    results
+}
+
+fn kill_process_pid(pid: u32) -> Result<()> {
+    // Try graceful SIGTERM first
+    let _ = Command::new("kill").args(["-15", &pid.to_string()]).status();
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
+    // Check if still running
+    let check = Command::new("kill").args(["-0", &pid.to_string()]).status();
+    if let Ok(st) = check
+        && st.success()
+    {
+        // Force SIGKILL
+        let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
+    }
+    Ok(())
+}
+
+/// Inspects active listening ports and terminates conflicting processes
+pub fn handle_port(theme: &ColorfulTheme, port: Option<&str>, kill: bool) -> Result<()> {
+    ui::maybe_auto_clear();
+    let ports = scan_listening_ports();
+
+    let target_port: Option<u16> = match port {
+        Some(p) => {
+            let clean = p.trim_start_matches(':');
+            match clean.parse::<u16>() {
+                Ok(val) => Some(val),
+                Err(_) => bail!("invalid port number '{p}'. Must be between 1 and 65535."),
+            }
+        }
+        None => None,
+    };
+
+    if let Some(target_port) = target_port {
+        let matches: Vec<&PortProcess> = ports.iter().filter(|p| p.port == target_port).collect();
+
+        if matches.is_empty() {
+            println!(
+                "{} No listening process detected on port {}.",
+                "●".blue(),
+                target_port.to_string().bold()
+            );
+            return Ok(());
+        }
+
+        ui::print_banner();
+        ui::render_breadcrumbs(&["run", "Port Inspector"]);
+
+        for proc in &matches {
+            ui::print_card(
+                &format!("Port {} Active Listener", proc.port),
+                &[
+                    ("Port", proc.port.to_string()),
+                    ("Process", proc.command.clone()),
+                    ("PID", proc.pid.to_string()),
+                    ("User", proc.user.clone()),
+                    ("Address", proc.name.clone()),
+                ],
+            );
+
+            if kill {
+                kill_process_pid(proc.pid)?;
+                println!(
+                    "{} Terminated process {} (PID: {}) on port {}.",
+                    "✔".green().bold(),
+                    proc.command.bold(),
+                    proc.pid,
+                    proc.port
+                );
+            } else if std::io::stdin().is_terminal() {
+                let should_kill = Confirm::with_theme(theme)
+                    .with_prompt(format!(
+                        "Terminate process '{}' (PID: {}) on port {}?",
+                        proc.command, proc.pid, proc.port
+                    ))
+                    .default(false)
+                    .interact()?;
+
+                if should_kill {
+                    kill_process_pid(proc.pid)?;
+                    println!(
+                        "{} Terminated process {} (PID: {}) on port {}.",
+                        "✔".green().bold(),
+                        proc.command.bold(),
+                        proc.pid,
+                        proc.port
+                    );
+                } else {
+                    println!("Process left running.");
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    // No port argument: show all active listening ports
+    ui::print_banner();
+    ui::render_breadcrumbs(&["run", "Active Listening Ports"]);
+
+    if ports.is_empty() {
+        println!("No active listening TCP ports detected.");
+        return Ok(());
+    }
+
+    if !std::io::stdin().is_terminal() {
+        println!("{:<8} {:<8} {:<18} {:<12} ADDRESS", "PORT", "PID", "PROCESS", "USER");
+        println!("{}", "─".repeat(60));
+        for p in &ports {
+            println!(
+                "{:<8} {:<8} {:<18} {:<12} {}",
+                p.port, p.pid, p.command, p.user, p.name
+            );
+        }
+        return Ok(());
+    }
+
+    let cancel_btn = cancel_option();
+    let mut menu_items: Vec<String> = ports
+        .iter()
+        .map(|p| {
+            format!(
+                "Port {:<6} ➔  {:<16} (PID: {:<6} User: {})",
+                p.port.to_string().bold(),
+                p.command.cyan(),
+                p.pid,
+                p.user.dimmed()
+            )
+        })
+        .collect();
+    menu_items.push(cancel_btn);
+
+    ui::print_key_hints();
+    let selection = Select::with_theme(theme)
+        .with_prompt("Select a port to inspect or terminate")
+        .items(&menu_items)
+        .default(0)
+        .interact()?;
+
+    if selection >= ports.len() {
+        println!("Cancelled.");
+        return Ok(());
+    }
+
+    let selected = &ports[selection];
+    ui::print_card(
+        &format!("Port {} Details", selected.port),
+        &[
+            ("Port", selected.port.to_string()),
+            ("Process", selected.command.clone()),
+            ("PID", selected.pid.to_string()),
+            ("User", selected.user.clone()),
+            ("Address", selected.name.clone()),
+        ],
+    );
+
+    let actions = ["Kill / Terminate Process", "Cancel"];
+    let act_sel = Select::with_theme(theme)
+        .with_prompt(format!("Action for PID {} ({})", selected.pid, selected.command))
+        .items(&actions)
+        .default(0)
+        .interact()?;
+
+    if act_sel == 0 {
+        kill_process_pid(selected.pid)?;
+        println!(
+            "{} Successfully killed process {} (PID: {}) on port {}! 🧹",
+            "✔".green().bold(),
+            selected.command.bold(),
+            selected.pid,
+            selected.port
+        );
+    } else {
+        println!("Cancelled.");
+    }
+
+    Ok(())
+}
+
+/// Manages custom developer aliases and shortcuts
+pub fn handle_alias(
+    theme: &ColorfulTheme,
+    action: Option<&str>,
+    name: Option<&str>,
+    target: Option<&str>,
+) -> Result<()> {
+    match action {
+        Some("list") | Some("ls") => {
+            let aliases = config::get_aliases();
+            if aliases.is_empty() {
+                println!("No custom aliases registered yet. Add one with: run alias add <name> \"<command>\"");
+                return Ok(());
+            }
+            ui::print_banner();
+            ui::render_breadcrumbs(&["run", "Custom Aliases"]);
+            let rows: Vec<(&str, String)> = aliases
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.clone()))
+                .collect();
+            ui::print_card("Configured Developer Aliases", &rows);
+        }
+        Some("add") | Some("set") => {
+            let a_name = name.context("missing alias name (e.g. 'run alias add c \"cargo check\"')")?;
+            let a_target = target.context("missing target command (e.g. 'run alias add c \"cargo check\"')")?;
+            config::set_alias(a_name, a_target)?;
+            println!(
+                "{} Registered alias: {} ➔ '{}'",
+                "✔".green().bold(),
+                a_name.bold(),
+                a_target.cyan()
+            );
+        }
+        Some("remove") | Some("rm") | Some("del") => {
+            let a_name = name.context("missing alias name (e.g. 'run alias rm c')")?;
+            if config::remove_alias(a_name)? {
+                println!("{} Removed alias '{}'", "✔".green().bold(), a_name);
+            } else {
+                println!("Alias '{}' not found.", a_name);
+            }
+        }
+        None => {
+            // Interactive management
+            ui::maybe_auto_clear();
+            ui::print_banner();
+            ui::render_breadcrumbs(&["run", "Aliases"]);
+
+            let aliases = config::get_aliases();
+            let mut card_rows = Vec::new();
+            for (k, v) in &aliases {
+                card_rows.push((k.as_str(), v.clone()));
+            }
+            if !card_rows.is_empty() {
+                ui::print_card("Active Aliases", &card_rows);
+            }
+
+            let cancel_btn = cancel_option();
+            let options = [
+                "➕ 1. Add New Command Alias",
+                "🗑️  2. Remove Existing Alias",
+                "📋 3. View All Aliases",
+                &cancel_btn,
+            ];
+
+            let sel = Select::with_theme(theme)
+                .with_prompt("Select alias action")
+                .items(&options)
+                .default(0)
+                .interact()?;
+
+            match sel {
+                0 => {
+                    let a_name: String = Input::with_theme(theme)
+                        .with_prompt("Alias name / trigger (e.g. 'c' or 'devs')")
+                        .interact_text()?;
+                    let a_target: String = Input::with_theme(theme)
+                        .with_prompt(format!("Target shell command for 'run {}'", a_name))
+                        .interact_text()?;
+
+                    config::set_alias(&a_name, &a_target)?;
+                    println!(
+                        "{} Registered alias: {} ➔ '{}'",
+                        "✔".green().bold(),
+                        a_name.bold(),
+                        a_target.cyan()
+                    );
+                }
+                1 => {
+                    if aliases.is_empty() {
+                        println!("No aliases registered to remove.");
+                        return Ok(());
+                    }
+                    let cancel_rm = cancel_option();
+                    let mut keys: Vec<String> = aliases
+                        .iter()
+                        .map(|(k, v)| format!("{:<12} ➔  {}", k.bold(), v.dimmed()))
+                        .collect();
+                    keys.push(cancel_rm);
+
+                    let rm_sel = Select::with_theme(theme)
+                        .with_prompt("Select alias to remove")
+                        .items(&keys)
+                        .default(0)
+                        .interact()?;
+
+                    if rm_sel < aliases.len() {
+                        let key_to_remove = aliases.keys().nth(rm_sel).unwrap();
+                        config::remove_alias(key_to_remove)?;
+                        println!("{} Removed alias '{}'", "✔".green().bold(), key_to_remove);
+                    } else {
+                        println!("Cancelled.");
+                    }
+                }
+                2 => {
+                    if aliases.is_empty() {
+                        println!("No aliases configured yet.");
+                    }
+                }
+                _ => {
+                    println!("Cancelled.");
+                }
+            }
+        }
+        Some(other) => {
+            bail!("unknown alias action '{other}'. Usage: run alias [list|add|rm]");
+        }
+    }
+    Ok(())
+}
+
+/// Displays terminal command execution analytics and productivity stats
+pub fn handle_stats(_theme: &ColorfulTheme) -> Result<()> {
+    ui::maybe_auto_clear();
+    ui::print_banner();
+    ui::render_breadcrumbs(&["run", "Usage Analytics"]);
+
+    let stats = config::load_command_stats();
+    let total_runs = stats.total_runs.to_string();
+    let first_used = stats.first_used.unwrap_or_else(|| "Just now".to_string());
+    let last_used = stats.last_used.unwrap_or_else(|| "Just now".to_string());
+    let unique_count = stats.command_counts.len().to_string();
+
+    ui::print_card(
+        "CLI Productivity Snapshot",
+        &[
+            ("Total Commands Run", total_runs),
+            ("Unique Commands", unique_count),
+            ("First Tracked Run", first_used),
+            ("Last Run Timestamp", last_used),
+        ],
+    );
+
+    if stats.command_counts.is_empty() {
+        println!("No command stats recorded yet. Run commands to see analytics!");
+        return Ok(());
+    }
+
+    // Sort commands by count descending
+    let mut sorted_counts: Vec<(&String, &u64)> = stats.command_counts.iter().collect();
+    sorted_counts.sort_by(|a, b| b.1.cmp(a.1));
+
+    let max_val = *sorted_counts.first().map(|(_, c)| *c).unwrap_or(&1);
+
+    println!("{}", "Top Command Usage Frequency:".bold());
+    println!();
+
+    for (rank, (cmd, count)) in sorted_counts.iter().take(8).enumerate() {
+        let bar_len = if max_val > 0 {
+            ((**count as f64 / max_val as f64) * 20.0).round() as usize
+        } else {
+            1
+        };
+        let bar_filled = "■".repeat(bar_len);
+        let bar_empty = "□".repeat(20 - bar_len.min(20));
+        let bar = format!("{}{}", bar_filled.green(), bar_empty.dimmed());
+
+        println!(
+            "  {}. {:<14} {} {:>4} runs",
+            rank + 1,
+            ui::primary_colored(cmd).bold(),
+            bar,
+            count
+        );
+    }
+    println!();
+
+    Ok(())
+}
+

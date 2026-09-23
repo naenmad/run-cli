@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -17,6 +18,8 @@ pub struct RunConfig {
     pub default_ide: Option<String>,
     /// Additional custom directory paths to scan for projects
     pub custom_hubs: Option<Vec<PathBuf>>,
+    /// Custom command shortcuts / aliases
+    pub aliases: Option<BTreeMap<String, String>>,
 }
 
 /// Returns the path to the run configuration directory (~/.config/run)
@@ -64,6 +67,11 @@ custom_hubs = [
     # "~/Developer/Summit",
     # "~/Work"
 ]
+
+# Custom developer aliases and shortcuts:
+[aliases]
+# c = "cargo check"
+# gs = "git status"
 "##;
             let _ = fs::write(&path, default_template);
         }
@@ -86,6 +94,93 @@ pub fn save_config(config: &RunConfig) -> Result<()> {
     let serialized = toml::to_string_pretty(config).context("failed to serialize configuration")?;
     fs::write(path, serialized).context("failed to write configuration file")?;
     Ok(())
+}
+
+/// Retrieves all registered custom aliases
+pub fn get_aliases() -> BTreeMap<String, String> {
+    load_config().aliases.unwrap_or_default()
+}
+
+/// Registers or updates a custom alias
+pub fn set_alias(name: &str, target: &str) -> Result<()> {
+    let mut cfg = load_config();
+    let mut aliases = cfg.aliases.unwrap_or_default();
+    aliases.insert(name.trim().to_string(), target.trim().to_string());
+    cfg.aliases = Some(aliases);
+    save_config(&cfg)
+}
+
+/// Removes a custom alias
+pub fn remove_alias(name: &str) -> Result<bool> {
+    let mut cfg = load_config();
+    let mut aliases = cfg.aliases.unwrap_or_default();
+    if aliases.remove(name.trim()).is_some() {
+        cfg.aliases = Some(aliases);
+        save_config(&cfg)?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct CommandStats {
+    pub total_runs: u64,
+    pub first_used: Option<String>,
+    pub last_used: Option<String>,
+    pub command_counts: BTreeMap<String, u64>,
+}
+
+pub fn stats_path() -> Result<PathBuf> {
+    Ok(config_dir()?.join("stats.json"))
+}
+
+pub fn load_command_stats() -> CommandStats {
+    let Ok(path) = stats_path() else {
+        return CommandStats::default();
+    };
+    if !path.exists() {
+        return CommandStats::default();
+    }
+    match fs::read_to_string(path) {
+        Ok(s) => serde_json::from_str(&s).unwrap_or_default(),
+        Err(_) => CommandStats::default(),
+    }
+}
+
+pub fn record_command_stat(cmd_name: &str) {
+    let Ok(path) = stats_path() else {
+        return;
+    };
+    let mut stats = load_command_stats();
+    stats.total_runs = stats.total_runs.saturating_add(1);
+    let now = chrono_now_str();
+    if stats.first_used.is_none() {
+        stats.first_used = Some(now.clone());
+    }
+    stats.last_used = Some(now);
+
+    let count = stats.command_counts.entry(cmd_name.to_string()).or_insert(0);
+    *count = count.saturating_add(1);
+
+    if let Ok(dir) = config_dir() {
+        let _ = fs::create_dir_all(dir);
+        if let Ok(serialized) = serde_json::to_string_pretty(&stats) {
+            let _ = fs::write(path, serialized);
+        }
+    }
+}
+
+fn chrono_now_str() -> String {
+    // Human readable local timestamp without extra dependencies
+    let output = std::process::Command::new("date")
+        .arg("+%Y-%m-%d %H:%M:%S")
+        .output();
+    if let Ok(out) = output {
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    } else {
+        "Unknown".to_string()
+    }
 }
 
 /// Parses a preset color name or arbitrary hex code ("#RRGGBB") into RGB (u8, u8, u8)

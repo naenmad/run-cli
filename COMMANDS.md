@@ -4,7 +4,30 @@
 
 ---
 
-## Command Reference Matrix (41 Commands)
+## Command Reference Matrix (61 Commands)
+
+### 🍏 macOS Native Interaction Suite
+
+| Semantic Command | 3-Letter Alias | Additional Aliases | Purpose |
+| :--- | :--- | :--- | :--- |
+| `wifi` | `wif` | - | Manage Wi-Fi connections, scan networks, toggle power, show Keychain passwords |
+| `bluetooth` | `blt` | `bt`, `blue` | Inspect Bluetooth controller state & connected devices |
+| `airpods` | `pod` | `pods` | Quick connect paired AirPods or Bluetooth headphones |
+| `airdrop` | `drp` | `drop` | Open AirDrop finder window or share files via native Share Sheet |
+| `music` | `msc` | `spotify` | Apple Music & Spotify player control (`play`, `pause`, `next`, `prev`) and track HUD |
+| `volume` | `vol` | `sound` | Audio volume HUD & slider (0-100%, mute/unmute) |
+| `note` | `not` | `notes` | Quick scratchpad saver directly into Apple Notes |
+| `fixapp` | `fix` | `xattr` | Fix Gatekeeper quarantine ("App is damaged and can't be opened") |
+| `battery` | `bat` | `batt` | Detailed battery health, cycle count, max capacity %, and charger wattage |
+| `awake` | `caf` | `caffeinate` | Keep Mac awake and prevent display/system sleep with countdown timer |
+| `peek` | `pek` | `ql`, `quicklook` | Launch native macOS QuickLook preview popup for any document or image |
+| `trash` | `tsh` | - | Inspect Trash disk usage or safely empty trash |
+| `shot` | `snt` | `snip`, `screenshot` | Capture screen selection or window directly to clipboard |
+| `notify` | `ntf` | `alert` | Dispatch native macOS notification banner with sound |
+| `dark` | `drk` | - | Toggle or set macOS Dark Mode |
+| `light` | `lit` | - | Set macOS Light Mode |
+| `lock` | `lok` | - | Lock macOS screen immediately |
+| `desktop` | `dkt` | `desk` | Hide or show desktop icons for clean presentations |
 
 ### 🛠️ Developer & Workspace Suite
 
@@ -291,6 +314,228 @@ run cfg edit
 
 # Reset configuration to factory defaults:
 run cfg reset
+```
+
+### 8. Port Inspector & Conflict Resolver
+
+```bash
+# List all active listening TCP ports interactively:
+run port
+run prt
+
+# Inspect specific port:
+run port 8000
+run port 3000
+
+# Terminate process blocking a port directly:
+run port 8000 -k
+run killport 8000
+```
+
+### 9. Custom Developer Aliases & Shortcuts
+
+```bash
+# Open interactive alias manager:
+run alias
+run als
+
+# Add custom alias:
+run alias add c "cargo check"
+run alias add gs "git status"
+run alias add devs "pnpm run dev"
+
+# Execute registered custom alias:
+run c
+run gs
+
+# List or remove aliases:
+run alias list
+run alias rm c
+```
+
+### 10. CLI Usage Analytics & Statistics
+
+```bash
+# View command execution stats and visual frequency bar chart:
+run stats
+run sts
+```
+
+### 11. 🍏 macOS Native Interaction Suite (Dual-Mode: Direct & Interactive)
+
+Every command in the macOS Native Suite works in **Dual-Mode**: run directly with arguments for instant execution, or omit arguments to trigger an interactive fuzzy menu.
+
+#### 1. Wi-Fi Manager (`run wifi`, `run wif`)
+```bash
+# Interactive Wi-Fi dashboard (status, scan, saved passwords, toggle):
+run wifi
+run wif
+
+# Direct Wi-Fi status:
+run wifi status
+
+# Scan nearby Wi-Fi networks interactively:
+run wifi scan
+
+# Connect to Wi-Fi network directly:
+run wifi connect "Office-5G" "SuperSecret123"
+
+# Show saved Wi-Fi password from macOS Keychain:
+run wifi pass "HomeNetwork"
+
+# Toggle Wi-Fi power:
+run wifi on
+run wifi off
+```
+
+#### 2. Bluetooth & AirPods (`run bluetooth`, `run bt`, `run airpods`, `run pods`)
+```bash
+# Inspect Bluetooth status & connected devices:
+run bt
+run bt status
+
+# One-click connect paired AirPods or Bluetooth headphones:
+run pods
+run airpods
+```
+
+#### 3. AirDrop & Share Sheet (`run airdrop`, `run drop`)
+```bash
+# Open native AirDrop window in Finder:
+run drop
+run airdrop
+
+# Share specific document or screenshot via native macOS Share Sheet:
+run drop report.pdf
+run airdrop ~/Downloads/photo.png
+```
+
+#### 4. Music & Media HUD (`run music`, `run msc`)
+```bash
+# Interactive player dashboard with track info HUD and controls:
+run music
+run msc
+
+# Direct playback controls (Apple Music & Spotify):
+run music play
+run music pause
+run music next
+run music prev
+```
+
+#### 5. Volume Controller (`run volume`, `run vol`)
+```bash
+# Interactive volume slider and presets:
+run vol
+run volume
+
+# Direct volume adjustment (0-100%):
+run vol 50
+run vol 80
+run vol mute
+run vol unmute
+```
+
+#### 6. Apple Notes Scratchpad (`run note`, `run not`)
+```bash
+# Direct note quick-saver into Apple Notes:
+run note "Meeting action items: review PR #42 and deploy to staging"
+
+# Interactive multi-line note creator:
+run note
+```
+
+#### 7. Gatekeeper & Quarantine Fixer (`run fixapp`, `run fix`)
+```bash
+# Fix Gatekeeper quarantine ("App is damaged and can't be opened"):
+run fixapp Figma
+run fix VSCode
+
+# Interactive fuzzy search across /Applications and ~/Applications:
+run fixapp
+run fix
+```
+
+#### 8. Battery Health Inspector (`run battery`, `run bat`)
+```bash
+# View charge %, cycle count, max capacity %, health condition, and charger wattage:
+run battery
+run bat
+```
+
+#### 9. Screen & System Sleeplessness (`run awake`, `run caf`)
+```bash
+# Keep Mac awake with active timer (caffeinate wrapper):
+run awake 30       # Keep awake for 30 minutes
+run awake 120      # Keep awake for 2 hours
+
+# Interactive duration picker:
+run awake
+run caf
+```
+
+#### 10. QuickLook Preview (`run peek`, `run pek`)
+```bash
+# Launch native macOS QuickLook preview popup:
+run peek design_mockup.png
+run peek README.md
+run peek data.pdf
+
+# Interactive file picker when omitted:
+run peek
+```
+
+#### 11. Trash Manager (`run trash`, `run tsh`)
+```bash
+# Interactive Trash storage inspector and confirmation dialog:
+run trash
+run tsh
+
+# List trash items or empty trash directly:
+run trash list
+run trash empty
+```
+
+#### 12. Screenshot & Snip (`run shot`, `run snt`, `run snip`)
+```bash
+# Interactive capture mode selector (selection, window, full screen):
+run shot
+run snip
+
+# Direct capture to clipboard:
+run shot selection
+run shot window
+run shot full
+```
+
+#### 13. System Notifications (`run notify`, `run ntf`)
+```bash
+# Dispatch native macOS notification banner with sound:
+run notify "Deploy Complete" "Production v1.4.0 deployed successfully"
+
+# Interactive prompt if omitted:
+run notify
+```
+
+#### 14. Appearance, Lock & Desktop
+```bash
+# Toggle or set macOS Dark Mode:
+run dark
+run drk on
+run drk off
+
+# Set Light Mode:
+run light
+run lit
+
+# Immediately lock macOS screen:
+run lock
+run lok
+
+# Hide or show desktop icons for clean screenshares & presentations:
+run desk hide
+run desk show
+run desk
 ```
 
 ---
