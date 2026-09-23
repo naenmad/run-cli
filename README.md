@@ -1,68 +1,196 @@
-# run
+# run-cli (`run`)
 
-`run` is a command-line productivity utility for macOS built around human-friendly verbs and dual-mode interaction.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/naenmad/run-cli/main/assets/banner.png" alt="run-cli banner" width="600" onerror="this.style.display='none'"/>
+</p>
 
-## Core Philosophy
+<p align="center">
+  <strong>Lightning-fast, intuitive macOS productivity CLI with dual-mode interaction, smart anti-typo resolution, and built-in developer workflows.</strong>
+</p>
 
-* **Human-Friendly First**: Replaces standard Unix command flags with direct, natural verbs that reflect common daily tasks.
-* **Dual-Mode Execution**: Accepts direct CLI arguments for quick execution, or drops into an interactive prompt menu when arguments are omitted.
-* **Ergonomic**: Standardized three-letter aliases across all commands reduce keystrokes and typing friction.
+<p align="center">
+  <a href="https://github.com/naenmad/run-cli/releases"><img src="https://img.shields.io/github/v/release/naenmad/run-cli?style=flat-square&color=00a2ff" alt="Latest Release"></a>
+  <a href="https://github.com/naenmad/run-cli/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/naenmad/run-cli/ci.yml?branch=main&style=flat-square&label=CI" alt="Build Status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License: MIT"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-2024%20edition-orange.svg?style=flat-square" alt="Rust Edition"></a>
+  <a href="#"><img src="https://img.shields.io/badge/platform-macOS-lightgrey.svg?style=flat-square" alt="Platform macOS"></a>
+</p>
 
-## Commands and Aliases
+---
 
-Every primary command supports both its full English verb and a mandatory three-letter alias:
+## ⚡ Why `run`?
 
-| Command | Alias (3 Letters) | Description | Example Usage |
-| :--- | :--- | :--- | :--- |
-| `make` | `mak` | Create a folder or empty file (dual-mode) | `run make folder notes` / `run mak` |
-| `open` | `opn` | Open a macOS application via `open -a` | `run open Safari` / `run opn Code` |
-| `copy` | `cpy` | Copy files or directories | `run copy file.txt backup.txt` |
-| `move` | `mov` | Move or rename files and directories | `run move old.txt new.txt` |
-| `del` | `dlt` | Safely delete files or directories | `run del temp/` |
-| `clear` | `clr` | Clear the terminal screen | `run clr` |
-| `go` | `jmp` | Smart folder navigation (root, back, subfolder, picker) | `run go root` / `run jmp` |
-| `help` | `guide` | Display full tutorial and command reference | `run help` / `run help go` |
+Standard Unix commands are cryptic and filled with archaic flags (`lsof -iTCP -sTCP:LISTEN -P`, `tar -czvf`, `find . -name`, `kill -9`). 
 
-## Dual-Mode Interaction
+`run` reimagines terminal productivity for modern developers:
+* **Semantic Verbs + 3-Letter Aliases**: Every action is intuitive (`make`/`mak`, `remove`/`rmv`, `port`/`prt`, `fetch`/`fch`, `clean`/`cln`).
+* **Dual-Mode Execution**: Run with direct arguments for lightning execution, or omit arguments to trigger an interactive prompt menu.
+* **Anti-Typo & Smart Auto-Completion**: Type `run pro` to jump straight to `project`. Mistyped `run fethc`? Levenshtein distance automatically detects `fetch`.
+* **Zero-Hesitation Workspace Hub**: Auto-scans all development folders (`~/Developer`, `~/Projects`, etc.) and opens them in VS Code, Cursor, Xcode, or switches active terminal directories in-place.
+* **Modern Developer Suite**: Out-of-the-box runners for testing, cache cleaning, 1-step Git syncing, LAN file sharing, network inspection, and microsecond command benchmarking.
+* **Human-Centric Safety**: Safe defaults, confirm-before-delete, and prominent **Red Cancel** options in all interactive menus.
 
-* **Direct Mode**: When you provide complete arguments (such as `run make folder project-x` or `run cpy notes.txt backup.txt`), the command executes immediately without prompt pauses.
-* **Interactive Mode**: When you type only the command or its alias (such as `run make` or `run opn`), an interactive prompt guides you through options and required inputs.
+---
 
-## Safety and Error Handling
+## 🚀 Quick Install
 
-* **Safe Deletion**: The `del` / `dlt` command always requires confirmation before deleting files or directories.
-* **Clear Error Messages**: Underlying operating system and process failures display clean, readable status notes rather than raw stack traces.
+### Option 1: Install via Cargo (Recommended)
 
-## Installation
+If you have Rust installed:
 
-### Prerequisites
-* Rust toolchain (1.80 or newer recommended)
-* macOS
-
-### Build Release Binary
 ```bash
+cargo install --git https://github.com/naenmad/run-cli
+```
+
+### Option 2: Pre-compiled GitHub Release (macOS Apple Silicon & Intel)
+
+Download and install the latest binary with a single terminal command:
+
+```bash
+# Apple Silicon (M1/M2/M3/M4)
+curl -fsSL https://github.com/naenmad/run-cli/releases/latest/download/run-macos-aarch64.tar.gz | tar -xz -C /usr/local/bin run
+
+# Intel Mac
+curl -fsSL https://github.com/naenmad/run-cli/releases/latest/download/run-macos-x86_64.tar.gz | tar -xz -C /usr/local/bin run
+```
+
+*(If `/usr/local/bin` requires root, use `sudo` or extract into `~/.local/bin`)*.
+
+### Option 3: Build from Source
+
+```bash
+git clone https://github.com/naenmad/run-cli.git
+cd run-cli
 cargo build --release
+sudo cp target/release/run /usr/local/bin/
 ```
 
-The compiled executable is placed at `target/release/run`.
+---
 
-### Install to System PATH
-To run `run` globally from any directory:
-```bash
-cargo install --path .
-```
+## ⚙️ Shell Integration (In-Place `cd`)
 
-Verify the installation:
-```bash
-run --help
-```
+Because a child process cannot alter its parent shell's working directory, `run` provides a lightweight shell wrapper so that commands like `run go <folder>` and `run project` seamlessly switch your active terminal directory:
 
-## Running Tests
+Add this single line to your `~/.zshrc` (or `~/.bashrc`):
 
 ```bash
-cargo test
+eval "$(run init)"
 ```
 
-## License
+Then reload your shell:
+```bash
+source ~/.zshrc
+```
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+Now `run go root`, `run go back`, or selecting a project with **"Hanya Pindah Terminal / Saja"** will change your terminal's directory instantly!
+
+---
+
+## 🎯 Command Cheatsheet
+
+`run` includes **36 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
+
+### 🛠️ Developer & Workspace Suite
+| Command | Alias | Purpose & Highlights |
+| :--- | :--- | :--- |
+| `project` | `prj` | Scan project directories & open in **VS Code**, **Cursor**, **Xcode**, or terminal |
+| `dev` | `dev` | Auto-detects project stack (`cargo`, `npm`, `pnpm`, `flutter`, `go`) and starts dev server |
+| `build` | `bld` | Compiles active project in release mode |
+| `test` | `tst` | Polyglot automated test runner (`cargo test`, `npm test`, `pytest`, `flutter test`, `go test`) |
+| `clean` | `cln` | Scans and deletes disposable caches (`target/`, `node_modules/`, `.next/`, `__pycache__/`, `DerivedData/`) with size report & confirmation |
+| `sync` | `snc`, `git` | 1-step Git pull, status review, commit message prompt, and push |
+| `network` | `net`, `ip` | Inspects local LAN (en0/en1) and public WAN IP with interactive clipboard copy |
+| `share` | `shr` | Instant local HTTP file server on LAN (`run share -p 8080`) |
+| `bench` | `bnc` | Microsecond-precision command execution benchmark timer |
+
+### 📂 Filesystem & Navigation
+| Command | Alias | Unix Alias | Purpose |
+| :--- | :--- | :--- | :--- |
+| `go` | `jmp` | `cd`, `nav` | Fast jump to root (`~`), back (`..`), subdirectories, or fuzzy hub picker |
+| `path` | `pth` | `pwd` | Print or copy current working directory to clipboard |
+| `list` | `lst` | `ls` | Colorized directory listing with human-readable file sizes |
+| `make` | `mak` | `touch`, `mkdir` | Unified creation of files or folders with automatic parent directory creation |
+| `remove` | `rmv` | `rm`, `del` | Safely remove files or directories with confirmation prompt (`y/N`) |
+| `copy` | `cpy` | `cp` | Copy files or directories recursively |
+| `move` | `mov` | `mv` | Move or rename files and directories |
+| `read` | `red` | `cat` | Inspect file contents directly in terminal |
+| `find` | `fnd` | `grep`, `search` | Recursive pattern and text search across files |
+| `permit` | `prm` | `chmod` | Modify file permissions using human presets (`755`, `644`, `+x`) |
+
+### ⚙️ System & Process Management
+| Command | Alias | Unix Alias | Purpose |
+| :--- | :--- | :--- | :--- |
+| `process` | `prc` | `ps`, `top` | List active processes or view system resource snapshot (CPU & Memory) |
+| `kill` | `kil` | `stop`, `stp` | Terminate process by PID or name with safe confirmation |
+| `disk` | `dsk` | `df`, `du` | Mounted volume free space or interactive directory disk usage selector |
+| `port` | `prt` | `lsof` | Inspect active TCP listening ports and associated processes |
+| `whoami` | `who` | `user` | Display user identity, UID, GID, and system hostname |
+| `time` | `tim` | `date` | Formatted current date and time |
+| `history` | `his` | - | Display recent shell command history |
+| `which` | `whc` | `loc` | Locate executable binary path in system `$PATH` |
+| `env` | `env` | - | Inspect or search environment variables |
+
+### 🌐 Network & Archive
+| Command | Alias | Unix Alias | Purpose |
+| :--- | :--- | :--- | :--- |
+| `fetch` | `fch` | `curl`, `wget` | Fetch HTTP response headers/body or download files with progress bar |
+| `ping` | `png` | - | Test host latency with packet summary |
+| `pack` | `pck` | `tar`, `zip` | Create compressed `.tar.gz` or `.zip` archive |
+| `unpack` | `upk` | `unzip`, `untar` | Extract `.tar.gz` or `.zip` archives |
+
+### 💡 General Utilities
+| Command | Alias | Purpose |
+| :--- | :--- | :--- |
+| `open` | `opn` | Launch macOS applications via native `open -a` |
+| `clear` | `clr` | Clear terminal screen |
+| `init` | `ini` | Output shell wrapper script for `~/.zshrc` |
+| `help` | `doc`, `guide` | Interactive terminal documentation and detailed guides (`run help <cmd>`) |
+
+---
+
+## 🧠 Interactive Intelligence
+
+### 1. Bare `run` Command Menu
+Running just `run` opens an interactive launcher listing all available tools. Use arrow keys to select and run:
+
+```bash
+$ run
+? Select a command to run ›
+❯ project       (prj)    Scan projects & open in IDE or terminal
+  dev                    Run active project dev server
+  build         (bld)    Build or compile active project
+  test          (tst)    Smart polyglot test runner (Rust, Node, Python, etc.)
+  clean         (cln)    Clean disposable build artifacts and cache folders
+  sync          (snc)    Interactive 1-step Git pull, commit, and push
+  network       (net)    Inspect local LAN and public IP with quick copy
+  ...
+  Cancel
+```
+
+### 2. Smart Prefix & Fuzzy Anti-Typo
+* **Shortcuts**: `run pro` immediately expands to `run project` because it's a unique prefix.
+* **Disambiguation**: `run p` lists all commands starting with `p` (`project`, `path`, `process`, `port`, `pack`, `permit`, `ping`).
+* **Typo Correction**: Mistyped `run fethc` or `run pak`? `run` suggests or auto-selects the nearest matching command via Levenshtein distance.
+
+---
+
+## 🤝 Contributing
+
+Contributions, bug reports, and suggestions are welcome!
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Ensure all tests and clippy pass:
+   ```bash
+   cargo test
+   cargo clippy --all-targets -- -D warnings
+   ```
+5. Push to your branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.

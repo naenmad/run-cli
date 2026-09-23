@@ -1,11 +1,14 @@
 [package]
 name = "run"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
-description = "Productivity CLI utility for macOS with dual-mode interaction"
+description = "Lightning-fast, intuitive productivity CLI utility with dual-mode interaction and developer workflows"
 repository = "https://github.com/naenmad/run-cli"
+homepage = "https://github.com/naenmad/run-cli"
 license = "MIT"
 readme = "README.md"
+keywords = ["cli", "productivity", "developer-tools", "terminal", "workflow"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 anyhow = "1.0"

@@ -4,7 +4,7 @@ use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use dialoguer::theme::ColorfulTheme;
@@ -14,7 +14,10 @@ mod commands;
 
 #[derive(Parser)]
 #[command(name = "run")]
-#[command(about = "Productivity CLI utility for macOS with dual-mode interaction", version)]
+#[command(
+    about = "Productivity CLI utility for macOS with dual-mode interaction",
+    version
+)]
 #[command(disable_help_subcommand = true)]
 struct Cli {
     #[command(subcommand)]
@@ -253,6 +256,51 @@ enum Commands {
     #[command(name = "init", alias = "ini")]
     Init,
 
+    /// Run automated test runner for the active project
+    #[command(name = "test", alias = "tst")]
+    Test,
+
+    /// Clean disposable build artifacts and caches (target, node_modules, etc.)
+    #[command(name = "clean", alias = "cln")]
+    Clean {
+        /// Target directory to scan and clean
+        path: Option<PathBuf>,
+    },
+
+    /// Git status, pull, commit, and push sync
+    #[command(name = "sync", alias = "snc", alias = "git")]
+    Sync {
+        /// Commit message
+        #[arg(short, long)]
+        message: Option<String>,
+        /// Switch branch interactively
+        #[arg(short = 'b', long)]
+        branch: bool,
+    },
+
+    /// Inspect local LAN and public IP addresses
+    #[command(name = "network", alias = "net", alias = "ip")]
+    Network,
+
+    /// Instant local HTTP file server on local network
+    #[command(name = "share", alias = "shr")]
+    Share {
+        /// Port to serve on
+        #[arg(short, long)]
+        port: Option<u16>,
+        /// Directory to share
+        #[arg(short = 'd', long)]
+        path: Option<PathBuf>,
+    },
+
+    /// Benchmark command execution time
+    #[command(name = "bench", alias = "bnc")]
+    Bench {
+        /// Command and arguments to benchmark
+        #[arg(trailing_var_arg = true)]
+        command: Vec<String>,
+    },
+
     /// Display complete command reference and usage tutorial
     #[command(name = "help", alias = "doc", alias = "guide")]
     Help {
@@ -265,6 +313,10 @@ enum Commands {
 enum MakeTargetType {
     Folder,
     File,
+}
+
+fn cancel_option() -> String {
+    format!("{}", "Cancel".bright_red().bold())
 }
 
 fn main() {
@@ -458,6 +510,42 @@ const ALL_COMMANDS: &[CommandInfo] = &[
         description: "Generate shell integration wrapper for ~/.zshrc",
     },
     CommandInfo {
+        name: "test",
+        alias_3: "tst",
+        aliases: &["tst"],
+        description: "Run automated tests for the active project",
+    },
+    CommandInfo {
+        name: "clean",
+        alias_3: "cln",
+        aliases: &["cln"],
+        description: "Clean disposable build caches & artifacts",
+    },
+    CommandInfo {
+        name: "sync",
+        alias_3: "snc",
+        aliases: &["snc", "git"],
+        description: "One-step git pull, commit, and push sync",
+    },
+    CommandInfo {
+        name: "network",
+        alias_3: "net",
+        aliases: &["net", "ip"],
+        description: "Inspect local LAN and public IP addresses",
+    },
+    CommandInfo {
+        name: "share",
+        alias_3: "shr",
+        aliases: &["shr"],
+        description: "Instant local HTTP file server on LAN",
+    },
+    CommandInfo {
+        name: "bench",
+        alias_3: "bnc",
+        aliases: &["bnc"],
+        description: "High-resolution command execution benchmark",
+    },
+    CommandInfo {
         name: "help",
         alias_3: "doc",
         aliases: &["doc", "guide"],
@@ -482,7 +570,11 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
 
     for i in 1..=m {
         for j in 1..=n {
-            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
+            let cost = if a_chars[i - 1] == b_chars[j - 1] {
+                0
+            } else {
+                1
+            };
             dp[i][j] = (dp[i - 1][j] + 1)
                 .min(dp[i][j - 1] + 1)
                 .min(dp[i - 1][j - 1] + cost);
@@ -493,7 +585,8 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
 }
 
 fn resolve_command_args(theme: &ColorfulTheme, args: &[String]) -> Result<Option<Vec<String>>> {
-    let interactive = std::io::stdin().is_terminal() && std::env::var("RUN_TEST_NON_INTERACTIVE").is_err();
+    let interactive =
+        std::io::stdin().is_terminal() && std::env::var("RUN_TEST_NON_INTERACTIVE").is_err();
     resolve_command_args_internal(theme, args, interactive)
 }
 
@@ -528,7 +621,8 @@ fn resolve_command_args_internal(
     let mut prefix_matches: Vec<&'static CommandInfo> = Vec::new();
     for cmd in ALL_COMMANDS {
         let matches_name = cmd.name.starts_with(&query);
-        let matches_alias = cmd.alias_3.starts_with(&query) || cmd.aliases.iter().any(|a| a.starts_with(&query));
+        let matches_alias =
+            cmd.alias_3.starts_with(&query) || cmd.aliases.iter().any(|a| a.starts_with(&query));
         if (matches_name || matches_alias) && !prefix_matches.iter().any(|m| m.name == cmd.name) {
             prefix_matches.push(cmd);
         }
@@ -559,7 +653,7 @@ fn resolve_command_args_internal(
                 format!("{:<14}{:<8} {}", cmd.name, alias_display, cmd.description)
             })
             .collect();
-        menu_items.push("Cancel".to_string());
+        menu_items.push(cancel_option());
 
         let prompt = format!("Multiple commands match '{}':", query);
         let selection = Select::with_theme(theme)
@@ -631,7 +725,7 @@ fn resolve_command_args_internal(
                 format!("{:<14}{:<8} {}", cmd.name, alias_display, cmd.description)
             })
             .collect();
-        menu_items.push("Cancel".to_string());
+        menu_items.push(cancel_option());
 
         let prompt = format!("Unknown command '{}'. Did you mean:", query);
         let selection = Select::with_theme(theme)
@@ -666,7 +760,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             format!("{:<14}{:<8} {}", cmd.name, alias_display, cmd.description)
         })
         .collect();
-    menu_items.push("Cancel".to_string());
+    menu_items.push(cancel_option());
 
     let selection = Select::with_theme(theme)
         .with_prompt("Select a command to run")
@@ -712,13 +806,22 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
         Commands::Path { interactive } => commands::handle_path(theme, interactive),
         Commands::Read { path } => commands::handle_read(theme, path),
         Commands::Find { pattern, path } => commands::handle_find(theme, pattern, path),
-        Commands::Process { filter, snapshot } => commands::handle_process(filter.as_deref(), snapshot),
+        Commands::Process { filter, snapshot } => {
+            commands::handle_process(filter.as_deref(), snapshot)
+        }
         Commands::Kill { target, force } => commands::handle_kill(theme, target.as_deref(), force),
         Commands::Port { port } => commands::handle_port(theme, port.as_deref()),
-        Commands::Fetch { url, output, headers } => commands::handle_fetch(theme, url.as_deref(), output, headers),
+        Commands::Fetch {
+            url,
+            output,
+            headers,
+        } => commands::handle_fetch(theme, url.as_deref(), output, headers),
         Commands::Disk { path, usage } => commands::handle_disk(theme, path, usage),
         Commands::Pack { archive, target } => commands::handle_pack(theme, archive, target),
-        Commands::Unpack { archive, destination } => commands::handle_unpack(theme, archive, destination),
+        Commands::Unpack {
+            archive,
+            destination,
+        } => commands::handle_unpack(theme, archive, destination),
         Commands::Permit { mode, path } => commands::handle_permit(theme, mode.as_deref(), path),
         Commands::Ping { host } => commands::handle_ping(theme, host.as_deref()),
         Commands::Whoami => commands::handle_whoami(),
@@ -729,6 +832,12 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
         Commands::Project { target } => handle_project(theme, target.as_deref()),
         Commands::Dev => handle_dev(),
         Commands::Build => handle_build(),
+        Commands::Test => commands::handle_test(),
+        Commands::Clean { path } => commands::handle_clean(theme, path),
+        Commands::Sync { message, branch } => commands::handle_sync(theme, message, branch),
+        Commands::Network => commands::handle_net(theme),
+        Commands::Share { port, path } => commands::handle_share(theme, port, path),
+        Commands::Bench { command } => commands::handle_bench(theme, &command),
         Commands::Init => handle_init(),
         Commands::Help { command } => handle_help(command.as_deref()),
     }
@@ -774,7 +883,8 @@ fn handle_make(
 ) -> Result<()> {
     let (target_type, target_path) = match (item, name) {
         (None, None) => {
-            let options = ["Folder", "File", "Cancel"];
+            let cancel_btn = cancel_option();
+            let options = ["Folder", "File", cancel_btn.as_str()];
             let selection = Select::with_theme(theme)
                 .with_prompt("Select item type to create")
                 .items(&options)
@@ -807,17 +917,18 @@ fn handle_make(
         }
         (Some(first), Some(second)) => {
             let first_lower = first.to_lowercase();
-            let selected_type = if first_lower == "folder" || first_lower == "dir" || first_lower == "directory" {
-                MakeTargetType::Folder
-            } else if first_lower == "file" {
-                MakeTargetType::File
-            } else if force_folder {
-                MakeTargetType::Folder
-            } else if force_file {
-                MakeTargetType::File
-            } else {
-                MakeTargetType::Folder
-            };
+            let selected_type =
+                if first_lower == "folder" || first_lower == "dir" || first_lower == "directory" {
+                    MakeTargetType::Folder
+                } else if first_lower == "file" {
+                    MakeTargetType::File
+                } else if force_folder {
+                    MakeTargetType::Folder
+                } else if force_file {
+                    MakeTargetType::File
+                } else {
+                    MakeTargetType::Folder
+                };
             (selected_type, second)
         }
         (Some(first), None) => {
@@ -861,7 +972,8 @@ fn handle_make(
                     } else if path.extension().is_some() {
                         MakeTargetType::File
                     } else {
-                        let options = ["Folder", "File", "Cancel"];
+                        let cancel_btn = cancel_option();
+                        let options = ["Folder", "File", cancel_btn.as_str()];
                         let selection = Select::with_theme(theme)
                             .with_prompt(format!("Create '{}' as", first))
                             .items(&options)
@@ -1083,7 +1195,11 @@ fn copy_item(source: &Path, destination: &Path) -> Result<()> {
         })?;
     }
 
-    println!("Copied '{}' to '{}'", source.display(), destination.display());
+    println!(
+        "Copied '{}' to '{}'",
+        source.display(),
+        destination.display()
+    );
     Ok(())
 }
 
@@ -1127,7 +1243,11 @@ fn move_item(source: &Path, destination: &Path) -> Result<()> {
         )
     })?;
 
-    println!("Moved '{}' to '{}'", source.display(), destination.display());
+    println!(
+        "Moved '{}' to '{}'",
+        source.display(),
+        destination.display()
+    );
     Ok(())
 }
 
@@ -1153,9 +1273,8 @@ fn ensure_parent_exists(path: &Path) -> Result<()> {
         && !parent.as_os_str().is_empty()
         && !parent.exists()
     {
-        fs::create_dir_all(parent).with_context(|| {
-            format!("failed to create parent directory '{}'", parent.display())
-        })?;
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create parent directory '{}'", parent.display()))?;
     }
     Ok(())
 }
@@ -1176,16 +1295,15 @@ fn clear_terminal() -> Result<()> {
 
 /// Handles smart directory navigation to root, back, fuzzy-searched subfolders, or via interactive menu.
 fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
-    let current_dir = std::env::current_dir().context("failed to read current working directory")?;
+    let current_dir =
+        std::env::current_dir().context("failed to read current working directory")?;
     let home_dir = std::env::var("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("/"));
 
     let target_path = match target {
         Some("root") | Some("~") => home_dir,
-        Some("back") | Some("..") => {
-            current_dir.parent().unwrap_or(&current_dir).to_path_buf()
-        }
+        Some("back") | Some("..") => current_dir.parent().unwrap_or(&current_dir).to_path_buf(),
         Some(query) => {
             let candidates = find_matching_directories(&current_dir, &home_dir, query);
 
@@ -1225,7 +1343,7 @@ fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
                             }
                         })
                         .collect();
-                    display_items.push("Cancel".to_string());
+                    display_items.push(cancel_option());
 
                     let prompt = format!("Multiple folders match '{query}'. Select target:");
                     let selection = Select::with_theme(theme)
@@ -1273,7 +1391,7 @@ fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
                     paths.push(path);
                 }
             }
-            options.push("Cancel".to_string());
+            options.push(cancel_option());
 
             let selection = Select::with_theme(theme)
                 .with_prompt("Select target folder")
@@ -1339,8 +1457,20 @@ fn find_matching_directories(current_dir: &Path, home_dir: &Path, query: &str) -
     }
 
     let ignored_names = [
-        "Library", ".Trash", ".git", "node_modules", "target", ".cargo", ".rustup",
-        ".gemini", ".vscode", ".npm", ".cache", ".local", "venv", ".venv",
+        "Library",
+        ".Trash",
+        ".git",
+        "node_modules",
+        "target",
+        ".cargo",
+        ".rustup",
+        ".gemini",
+        ".vscode",
+        ".npm",
+        ".cache",
+        ".local",
+        "venv",
+        ".venv",
     ];
 
     let mut ctx = SearchContext {
@@ -1403,12 +1533,7 @@ struct SearchContext<'a> {
     scored: &'a mut Vec<(f64, PathBuf)>,
 }
 
-fn scan_for_query(
-    dir: &Path,
-    depth: usize,
-    depth_from_root: usize,
-    ctx: &mut SearchContext,
-) {
+fn scan_for_query(dir: &Path, depth: usize, depth_from_root: usize, ctx: &mut SearchContext) {
     if depth == 0 {
         return;
     }
@@ -1467,7 +1592,8 @@ fn handle_init() -> Result<()> {
 
 /// Handles smart project scanning, contextual project selection, and interactive IDE launching.
 fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
-    let current_dir = std::env::current_dir().context("failed to read current working directory")?;
+    let current_dir =
+        std::env::current_dir().context("failed to read current working directory")?;
     let home_dir = std::env::var("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("/"));
@@ -1517,7 +1643,7 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
                             }
                         })
                         .collect();
-                    display_items.push("Cancel".to_string());
+                    display_items.push(cancel_option());
 
                     let prompt = format!("Multiple projects match '{t}'. Select target:");
                     let selection = Select::with_theme(theme)
@@ -1555,7 +1681,7 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
                     }
                 })
                 .collect();
-            display_items.push("Cancel".to_string());
+            display_items.push(cancel_option());
 
             let selection = Select::with_theme(theme)
                 .with_prompt("Select project")
@@ -1574,12 +1700,13 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
 
     let canonical = target_path.canonicalize().unwrap_or(target_path);
 
+    let cancel_btn = cancel_option();
     let ide_options = [
         "Visual Studio Code (code)",
         "Cursor (cursor)",
         "Xcode (xcode)",
         "Hanya Pindah Terminal / Saja",
-        "Cancel",
+        cancel_btn.as_str(),
     ];
 
     let term = dialoguer::console::Term::stderr();
@@ -1702,7 +1829,11 @@ fn open_in_xcode(path: &Path, is_shell_resolve: bool) -> Result<()> {
     let status = if let Some(target) = xcode_file {
         Command::new("open").arg(target).status()
     } else {
-        Command::new("open").arg("-a").arg("Xcode").arg(path).status()
+        Command::new("open")
+            .arg("-a")
+            .arg("Xcode")
+            .arg(path)
+            .status()
     }
     .with_context(|| "failed to launch Xcode")?;
 
@@ -1733,9 +1864,26 @@ fn scan_projects(home_dir: &Path, current_dir: &Path) -> Vec<PathBuf> {
     ];
 
     let ignored_names = [
-        "Library", ".Trash", ".git", "node_modules", "target", ".cargo", ".rustup",
-        ".gemini", ".vscode", ".npm", ".cache", ".local", "venv", ".venv", "Pods",
-        "DerivedData", ".build", ".next", "dist", "build",
+        "Library",
+        ".Trash",
+        ".git",
+        "node_modules",
+        "target",
+        ".cargo",
+        ".rustup",
+        ".gemini",
+        ".vscode",
+        ".npm",
+        ".cache",
+        ".local",
+        "venv",
+        ".venv",
+        "Pods",
+        "DerivedData",
+        ".build",
+        ".next",
+        "dist",
+        "build",
     ];
 
     for hub in &candidate_hubs {
@@ -1939,11 +2087,20 @@ fn electric_blue(text: &str) -> colored::ColoredString {
 /// Creates a customized dialoguer theme replacing default cyan with high-contrast electric blue.
 fn custom_theme() -> ColorfulTheme {
     let mut theme = ColorfulTheme::default();
-    let electric_style = dialoguer::console::Style::new().for_stderr().color256(39).bold();
-    let electric_symbol = dialoguer::console::style("❯".to_string()).for_stderr().color256(39).bold();
+    let electric_style = dialoguer::console::Style::new()
+        .for_stderr()
+        .color256(39)
+        .bold();
+    let electric_symbol = dialoguer::console::style("❯".to_string())
+        .for_stderr()
+        .color256(39)
+        .bold();
 
     theme.prompt_style = dialoguer::console::Style::new().for_stderr().bold();
-    theme.prompt_prefix = dialoguer::console::style("?".to_string()).for_stderr().color256(39).bold();
+    theme.prompt_prefix = dialoguer::console::style("?".to_string())
+        .for_stderr()
+        .color256(39)
+        .bold();
     theme.values_style = electric_style.clone();
     theme.active_item_style = electric_style;
     theme.active_item_prefix = electric_symbol.clone();
@@ -1976,13 +2133,55 @@ fn print_main_help() {
     print_cmd_summary("project", "prj", "Scan projects & open in IDE or terminal");
     print_cmd_summary("dev", "dev", "Run active project dev server");
     print_cmd_summary("build", "bld", "Build or compile active project");
+    print_cmd_summary(
+        "test",
+        "tst",
+        "Smart polyglot test runner (Rust, Node, Python, etc.)",
+    );
+    print_cmd_summary(
+        "clean",
+        "cln",
+        "Clean disposable build artifacts and cache folders",
+    );
+    print_cmd_summary(
+        "sync",
+        "snc (git)",
+        "Interactive 1-step Git pull, commit, and push",
+    );
+    print_cmd_summary(
+        "network",
+        "net (ip)",
+        "Inspect local LAN and public IP with quick copy",
+    );
+    print_cmd_summary("share", "shr", "Instant local LAN HTTP file server");
+    print_cmd_summary(
+        "bench",
+        "bnc",
+        "Benchmark command execution duration & performance",
+    );
     println!();
     println!("{}", electric_blue("FILESYSTEM & NAVIGATION:").bold());
     print_cmd_summary("go", "jmp (cd)", "Smart directory navigation & hub jump");
-    print_cmd_summary("path", "pth (pwd)", "Print or copy current working directory");
-    print_cmd_summary("list", "lst (ls)", "List directory contents with formatted sizes");
-    print_cmd_summary("make", "mak (touch, mkdir)", "Create folders or empty files");
-    print_cmd_summary("remove", "rmv (rm, del)", "Safely delete files or directories");
+    print_cmd_summary(
+        "path",
+        "pth (pwd)",
+        "Print or copy current working directory",
+    );
+    print_cmd_summary(
+        "list",
+        "lst (ls)",
+        "List directory contents with formatted sizes",
+    );
+    print_cmd_summary(
+        "make",
+        "mak (touch, mkdir)",
+        "Create folders or empty files",
+    );
+    print_cmd_summary(
+        "remove",
+        "rmv (rm, del)",
+        "Safely delete files or directories",
+    );
     print_cmd_summary("copy", "cpy (cp)", "Copy files or directories recursively");
     print_cmd_summary("move", "mov (mv)", "Move or rename files and directories");
     print_cmd_summary("read", "red (cat)", "Inspect file contents directly");
@@ -1990,9 +2189,21 @@ fn print_main_help() {
     print_cmd_summary("permit", "prm (chmod)", "Change permissions with presets");
     println!();
     println!("{}", electric_blue("SYSTEM & PROCESS:").bold());
-    print_cmd_summary("process", "prc (ps, top)", "Inspect active processes or resource snapshot");
-    print_cmd_summary("kill", "kil (stop)", "Terminate process with search & confirm");
-    print_cmd_summary("disk", "dsk (df, du)", "Inspect disk space or directory usage");
+    print_cmd_summary(
+        "process",
+        "prc (ps, top)",
+        "Inspect active processes or resource snapshot",
+    );
+    print_cmd_summary(
+        "kill",
+        "kil (stop)",
+        "Terminate process with search & confirm",
+    );
+    print_cmd_summary(
+        "disk",
+        "dsk (df, du)",
+        "Inspect disk space or directory usage",
+    );
     print_cmd_summary("whoami", "who", "Display user identity and system details");
     print_cmd_summary("time", "tim (date)", "Display current date and time");
     print_cmd_summary("history", "his", "Display recent shell command history");
@@ -2000,10 +2211,22 @@ fn print_main_help() {
     print_cmd_summary("env", "env", "Inspect or search environment variables");
     println!();
     println!("{}", electric_blue("NETWORKING & ARCHIVE:").bold());
-    print_cmd_summary("port", "prt (lsof)", "Check active listening ports & sockets");
-    print_cmd_summary("fetch", "fch (curl, wget)", "Fetch HTTP response or download file");
+    print_cmd_summary(
+        "port",
+        "prt (lsof)",
+        "Check active listening ports & sockets",
+    );
+    print_cmd_summary(
+        "fetch",
+        "fch (curl, wget)",
+        "Fetch HTTP response or download file",
+    );
     print_cmd_summary("ping", "png", "Test network host latency");
-    print_cmd_summary("pack", "pck (tar, zip)", "Create compressed archive (.tar.gz, .zip)");
+    print_cmd_summary(
+        "pack",
+        "pck (tar, zip)",
+        "Create compressed archive (.tar.gz, .zip)",
+    );
     print_cmd_summary("unpack", "upk (unzip)", "Extract compressed archive");
     println!();
     println!("{}", electric_blue("UTILITY:").bold());
@@ -2019,7 +2242,8 @@ fn print_main_help() {
     println!();
     println!(
         "{}",
-        electric_blue("Run 'run help <command>' (e.g. 'run help fetch') for detailed guide.").dimmed()
+        electric_blue("Run 'run help <command>' (e.g. 'run help fetch') for detailed guide.")
+            .dimmed()
     );
     println!();
 }
@@ -2039,7 +2263,10 @@ fn print_command_detail(cmd: &str) {
 
     match cmd_lower.as_str() {
         "make" | "mak" | "mkdir" | "touch" => {
-            println!("{} make (alias: mak, mkdir, touch)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} make (alias: mak, mkdir, touch)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Unified creation for folders and files directly or interactively.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run make folder <path>    Create folder and required parents");
@@ -2050,7 +2277,10 @@ fn print_command_detail(cmd: &str) {
             println!("  run mak file src/routes/index.ts");
         }
         "remove" | "rmv" | "del" | "dlt" | "rm" | "delete" => {
-            println!("{} remove (alias: rmv, del, rm)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} remove (alias: rmv, del, rm)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Safely remove files or directories with confirmation prompt.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run remove <path>         Prompt confirmation [y/N] then delete");
@@ -2079,7 +2309,10 @@ fn print_command_detail(cmd: &str) {
             println!("  run mov assets/ public/assets/");
         }
         "path" | "pth" | "pwd" => {
-            println!("{} path (alias: pth, pwd)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} path (alias: pth, pwd)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Print or copy current working directory path.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run path                  Print current directory");
@@ -2094,21 +2327,30 @@ fn print_command_detail(cmd: &str) {
             println!("  run lst -l                Long listing format");
         }
         "read" | "red" | "cat" => {
-            println!("{} read (alias: red, cat)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} read (alias: red, cat)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Display file contents with text decoding.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run read <file>           Display file contents");
             println!("  run red                   Interactive file picker in current directory");
         }
         "find" | "fnd" | "grep" | "search" => {
-            println!("{} find (alias: fnd, grep)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} find (alias: fnd, grep)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Search pattern or text across files recursively.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run find <pattern> [path] Search pattern in path (default current dir)");
             println!("  run fnd                   Prompt for pattern interactively");
         }
         "process" | "prc" | "ps" | "top" => {
-            println!("{} process (alias: prc, ps, top)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} process (alias: prc, ps, top)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Inspect active processes or display resource usage snapshot.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run process               List active processes");
@@ -2116,21 +2358,30 @@ fn print_command_detail(cmd: &str) {
             println!("  run prc -s                Resource usage snapshot (CPU & Memory)");
         }
         "kill" | "kil" | "stop" | "stp" => {
-            println!("{} kill (alias: kil, stop)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} kill (alias: kil, stop)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Terminate a running process by PID or name with safe confirmation.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run kill <pid_or_name>    Prompt confirmation and terminate");
             println!("  run kil                   Interactive process selector & confirm");
         }
         "port" | "prt" | "lsof" => {
-            println!("{} port (alias: prt, lsof)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} port (alias: prt, lsof)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Inspect active network ports and listening sockets.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run port <port>           Check process on port (e.g. 3000)");
             println!("  run prt                   Prompt for port or list all listening TCP");
         }
         "fetch" | "fch" | "get" | "curl" | "wget" => {
-            println!("{} fetch (alias: fch, get, curl, wget)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} fetch (alias: fch, get, curl, wget)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Unified network client: fetch HTTP responses or download files locally.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run fetch <url>           Fetch HTTP response headers and body");
@@ -2138,7 +2389,10 @@ fn print_command_detail(cmd: &str) {
             println!("  run fch                   Prompt for URL interactively");
         }
         "disk" | "dsk" | "df" | "du" => {
-            println!("{} disk (alias: dsk, df, du)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} disk (alias: dsk, df, du)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Inspect disk free space on mounted volumes or directory usage.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run disk                  Display mounted volumes free space");
@@ -2146,21 +2400,30 @@ fn print_command_detail(cmd: &str) {
             println!("  run dsk -u                Interactive folder usage selector");
         }
         "pack" | "pck" | "tar" | "zip" => {
-            println!("{} pack (alias: pck, tar, zip)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} pack (alias: pck, tar, zip)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Create compressed archives (.tar.gz or .zip).\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run pack <archive> <target>   Create archive from target");
             println!("  run pck                       Interactive prompt for archive and target");
         }
         "unpack" | "upk" | "unzip" | "untar" => {
-            println!("{} unpack (alias: upk, unzip)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} unpack (alias: upk, unzip)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Extract compressed archives (.zip or .tar.gz).\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run unpack <archive> [dst]    Extract archive to destination");
             println!("  run upk                       Interactive archive picker in current dir");
         }
         "permit" | "prm" | "chmod" => {
-            println!("{} permit (alias: prm, chmod)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} permit (alias: prm, chmod)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Change file or folder permissions with presets.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run permit <mode> <path>  Update permissions (e.g. 755, 644, +x)");
@@ -2181,7 +2444,10 @@ fn print_command_detail(cmd: &str) {
             println!("  run who");
         }
         "time" | "tim" | "date" => {
-            println!("{} time (alias: tim, date)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} time (alias: tim, date)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Display formatted current date and time.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run time");
@@ -2216,7 +2482,10 @@ fn print_command_detail(cmd: &str) {
             println!("  run clr");
         }
         "go" | "jmp" | "nav" | "cd" => {
-            println!("{} go (alias: jmp, nav, cd)", electric_blue("COMMAND:").bold());
+            println!(
+                "{} go (alias: jmp, nav, cd)",
+                electric_blue("COMMAND:").bold()
+            );
             println!("Smart directory navigation replacing manual cd commands.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run go root               Jump to home directory (~)");
@@ -2264,6 +2533,71 @@ fn print_command_detail(cmd: &str) {
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run build");
             println!("  run bld");
+        }
+        "test" | "tst" => {
+            println!("{} test (alias: tst)", electric_blue("COMMAND:").bold());
+            println!("Smart polyglot test runner detecting project stack automatically.\n");
+            println!("{}", electric_blue("DETECTED RUNNERS:").bold());
+            println!("  - Cargo.toml     -> cargo test");
+            println!("  - package.json   -> pnpm/yarn/bun/npm test");
+            println!("  - pytest/unittest-> pytest / python3 -m unittest");
+            println!("  - pubspec.yaml   -> flutter test");
+            println!("  - go.mod         -> go test ./...\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run test                  Run project test suite");
+            println!("  run tst                   Alias");
+        }
+        "clean" | "cln" => {
+            println!("{} clean (alias: cln)", electric_blue("COMMAND:").bold());
+            println!(
+                "Clean disposable build artifacts and caches with size calculation and confirmation.\n"
+            );
+            println!("{}", electric_blue("TARGETED ARTIFACTS:").bold());
+            println!(
+                "  target/, node_modules/, .next/, dist/, build/, __pycache__/, DerivedData/\n"
+            );
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run clean                 Scan and prompt confirmation before cleaning");
+            println!("  run cln                   Alias");
+        }
+        "sync" | "snc" | "git" => {
+            println!(
+                "{} sync (alias: snc, git)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("1-step Git sync: pull latest, review status, commit, and push.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!(
+                "  run sync                  Interactive pull, commit message prompt, and push"
+            );
+            println!("  run sync -m \"commit msg\"  Fast commit and push directly");
+            println!("  run sync -b <branch>      Switch or create branch");
+        }
+        "network" | "net" | "ip" => {
+            println!(
+                "{} network (alias: net, ip)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!(
+                "Inspect local LAN and public IP addresses with interactive copy to clipboard.\n"
+            );
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run network               Show LAN & public IP");
+            println!("  run net                   Alias");
+        }
+        "share" | "shr" => {
+            println!("{} share (alias: shr)", electric_blue("COMMAND:").bold());
+            println!("Instant local LAN HTTP file server for current folder.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run share                 Start file server on port 8000");
+            println!("  run shr -p 8080           Start file server on custom port");
+        }
+        "bench" | "bnc" => {
+            println!("{} bench (alias: bnc)", electric_blue("COMMAND:").bold());
+            println!("Benchmark command execution duration with high-precision timing.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run bench <command...>    Benchmark command execution");
+            println!("  run bnc cargo build       Example");
         }
         "open" | "opn" => {
             println!("{} open (alias: opn)", electric_blue("COMMAND:").bold());
@@ -2358,27 +2692,37 @@ mod tests {
 
         assert!(matches!(
             Cli::try_parse_from(["run", "cpy", "a.txt", "b.txt"]),
-            Ok(Cli { command: Some(Commands::Copy { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Copy { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "mov", "a.txt", "b.txt"]),
-            Ok(Cli { command: Some(Commands::Move { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Move { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "dlt", "temp.txt"]),
-            Ok(Cli { command: Some(Commands::Remove { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Remove { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "clr"]),
-            Ok(Cli { command: Some(Commands::Clear) })
+            Ok(Cli {
+                command: Some(Commands::Clear)
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "help"]),
-            Ok(Cli { command: Some(Commands::Help { command: None }) })
+            Ok(Cli {
+                command: Some(Commands::Help { command: None })
+            })
         ));
 
         assert!(matches!(
@@ -2403,22 +2747,30 @@ mod tests {
 
         assert!(matches!(
             Cli::try_parse_from(["run", "nav"]),
-            Ok(Cli { command: Some(Commands::Go { target: None }) })
+            Ok(Cli {
+                command: Some(Commands::Go { target: None })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "ini"]),
-            Ok(Cli { command: Some(Commands::Init) })
+            Ok(Cli {
+                command: Some(Commands::Init)
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "project"]),
-            Ok(Cli { command: Some(Commands::Project { target: None }) })
+            Ok(Cli {
+                command: Some(Commands::Project { target: None })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "pro"]),
-            Ok(Cli { command: Some(Commands::Project { target: None }) })
+            Ok(Cli {
+                command: Some(Commands::Project { target: None })
+            })
         ));
 
         assert!(matches!(
@@ -2428,52 +2780,76 @@ mod tests {
 
         assert!(matches!(
             Cli::try_parse_from(["run", "dev"]),
-            Ok(Cli { command: Some(Commands::Dev) })
+            Ok(Cli {
+                command: Some(Commands::Dev)
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "develop"]),
-            Ok(Cli { command: Some(Commands::Dev) })
+            Ok(Cli {
+                command: Some(Commands::Dev)
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "build"]),
-            Ok(Cli { command: Some(Commands::Build) })
+            Ok(Cli {
+                command: Some(Commands::Build)
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "bld"]),
-            Ok(Cli { command: Some(Commands::Build) })
+            Ok(Cli {
+                command: Some(Commands::Build)
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "path"]),
-            Ok(Cli { command: Some(Commands::Path { interactive: false }) })
+            Ok(Cli {
+                command: Some(Commands::Path { interactive: false })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "pth"]),
-            Ok(Cli { command: Some(Commands::Path { interactive: false }) })
+            Ok(Cli {
+                command: Some(Commands::Path { interactive: false })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "pwd"]),
-            Ok(Cli { command: Some(Commands::Path { interactive: false }) })
+            Ok(Cli {
+                command: Some(Commands::Path { interactive: false })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "list", "-a", "-l"]),
-            Ok(Cli { command: Some(Commands::List { all: true, long: true, .. }) })
+            Ok(Cli {
+                command: Some(Commands::List {
+                    all: true,
+                    long: true,
+                    ..
+                })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "lst"]),
-            Ok(Cli { command: Some(Commands::List { .. }) })
+            Ok(Cli {
+                command: Some(Commands::List { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "ls"]),
-            Ok(Cli { command: Some(Commands::List { .. }) })
+            Ok(Cli {
+                command: Some(Commands::List { .. })
+            })
         ));
 
         assert!(matches!(
@@ -2483,52 +2859,72 @@ mod tests {
 
         assert!(matches!(
             Cli::try_parse_from(["run", "mkdir", "my_dir"]),
-            Ok(Cli { command: Some(Commands::Make { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Make { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "touch", "my_file"]),
-            Ok(Cli { command: Some(Commands::Make { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Make { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "cp", "a", "b"]),
-            Ok(Cli { command: Some(Commands::Copy { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Copy { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "mv", "a", "b"]),
-            Ok(Cli { command: Some(Commands::Move { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Move { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "remove", "dir"]),
-            Ok(Cli { command: Some(Commands::Remove { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Remove { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "rmv", "dir"]),
-            Ok(Cli { command: Some(Commands::Remove { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Remove { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "rm", "dir"]),
-            Ok(Cli { command: Some(Commands::Remove { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Remove { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "read", "file.txt"]),
-            Ok(Cli { command: Some(Commands::Read { path: Some(_) }) })
+            Ok(Cli {
+                command: Some(Commands::Read { path: Some(_) })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "red", "file.txt"]),
-            Ok(Cli { command: Some(Commands::Read { path: Some(_) }) })
+            Ok(Cli {
+                command: Some(Commands::Read { path: Some(_) })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "cat", "file.txt"]),
-            Ok(Cli { command: Some(Commands::Read { path: Some(_) }) })
+            Ok(Cli {
+                command: Some(Commands::Read { path: Some(_) })
+            })
         ));
 
         assert!(matches!(
@@ -2548,67 +2944,93 @@ mod tests {
 
         assert!(matches!(
             Cli::try_parse_from(["run", "process"]),
-            Ok(Cli { command: Some(Commands::Process { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Process { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "prc"]),
-            Ok(Cli { command: Some(Commands::Process { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Process { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "proc"]),
-            Ok(Cli { command: Some(Commands::Process { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Process { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "kill", "1234"]),
-            Ok(Cli { command: Some(Commands::Kill { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Kill { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "kil", "1234"]),
-            Ok(Cli { command: Some(Commands::Kill { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Kill { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "port", "3000"]),
-            Ok(Cli { command: Some(Commands::Port { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Port { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "prt", "3000"]),
-            Ok(Cli { command: Some(Commands::Port { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Port { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "fetch", "https://example.com"]),
-            Ok(Cli { command: Some(Commands::Fetch { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Fetch { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "fch", "https://example.com"]),
-            Ok(Cli { command: Some(Commands::Fetch { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Fetch { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "disk"]),
-            Ok(Cli { command: Some(Commands::Disk { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Disk { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "dsk"]),
-            Ok(Cli { command: Some(Commands::Disk { .. }) })
+            Ok(Cli {
+                command: Some(Commands::Disk { .. })
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "whoami"]),
-            Ok(Cli { command: Some(Commands::Whoami) })
+            Ok(Cli {
+                command: Some(Commands::Whoami)
+            })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "who"]),
-            Ok(Cli { command: Some(Commands::Whoami) })
+            Ok(Cli {
+                command: Some(Commands::Whoami)
+            })
         ));
 
         assert!(matches!(
@@ -2620,6 +3042,103 @@ mod tests {
             Cli::try_parse_from(["run", "whc", "node"]),
             Ok(Cli { command: Some(Commands::Which { binary: Some(ref b) }) }) if b == "node"
         ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "test"]),
+            Ok(Cli {
+                command: Some(Commands::Test)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "tst"]),
+            Ok(Cli {
+                command: Some(Commands::Test)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "clean"]),
+            Ok(Cli {
+                command: Some(Commands::Clean { .. })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "cln"]),
+            Ok(Cli {
+                command: Some(Commands::Clean { .. })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "sync"]),
+            Ok(Cli {
+                command: Some(Commands::Sync { .. })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "snc"]),
+            Ok(Cli {
+                command: Some(Commands::Sync { .. })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "git"]),
+            Ok(Cli {
+                command: Some(Commands::Sync { .. })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "network"]),
+            Ok(Cli {
+                command: Some(Commands::Network)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "net"]),
+            Ok(Cli {
+                command: Some(Commands::Network)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "ip"]),
+            Ok(Cli {
+                command: Some(Commands::Network)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "share"]),
+            Ok(Cli {
+                command: Some(Commands::Share { port: None, .. })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "shr", "-p", "8080"]),
+            Ok(Cli {
+                command: Some(Commands::Share {
+                    port: Some(8080),
+                    ..
+                })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "bench", "echo", "hello"]),
+            Ok(Cli { command: Some(Commands::Bench { ref command }) }) if command == &["echo", "hello"]
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "bnc", "ls"]),
+            Ok(Cli { command: Some(Commands::Bench { ref command }) }) if command == &["ls"]
+        ));
     }
 
     #[test]
@@ -2627,27 +3146,33 @@ mod tests {
         let theme = custom_theme();
 
         // Exact alias: pro -> project
-        let res = resolve_command_args_internal(&theme, &["run".into(), "pro".into()], false).unwrap();
+        let res =
+            resolve_command_args_internal(&theme, &["run".into(), "pro".into()], false).unwrap();
         assert_eq!(res, Some(vec!["run".to_string(), "project".to_string()]));
 
         // Prefix match: proj -> project
-        let res = resolve_command_args_internal(&theme, &["run".into(), "proj".into()], false).unwrap();
+        let res =
+            resolve_command_args_internal(&theme, &["run".into(), "proj".into()], false).unwrap();
         assert_eq!(res, Some(vec!["run".to_string(), "project".to_string()]));
 
         // Prefix match: proc -> process
-        let res = resolve_command_args_internal(&theme, &["run".into(), "proc".into()], false).unwrap();
+        let res =
+            resolve_command_args_internal(&theme, &["run".into(), "proc".into()], false).unwrap();
         assert_eq!(res, Some(vec!["run".to_string(), "process".to_string()]));
 
         // Single letter prefix: g -> go
-        let res = resolve_command_args_internal(&theme, &["run".into(), "g".into()], false).unwrap();
+        let res =
+            resolve_command_args_internal(&theme, &["run".into(), "g".into()], false).unwrap();
         assert_eq!(res, Some(vec!["run".to_string(), "go".to_string()]));
 
         // Fuzzy / typo in non-interactive environment: pak -> pack
-        let res = resolve_command_args_internal(&theme, &["run".into(), "pak".into()], false).unwrap();
+        let res =
+            resolve_command_args_internal(&theme, &["run".into(), "pak".into()], false).unwrap();
         assert_eq!(res, Some(vec!["run".to_string(), "pack".to_string()]));
 
         // Fuzzy / typo in non-interactive environment: fethc -> fetch
-        let res = resolve_command_args_internal(&theme, &["run".into(), "fethc".into()], false).unwrap();
+        let res =
+            resolve_command_args_internal(&theme, &["run".into(), "fethc".into()], false).unwrap();
         assert_eq!(res, Some(vec!["run".to_string(), "fetch".to_string()]));
     }
 }
