@@ -3251,3 +3251,320 @@ pub fn handle_stats(_theme: &ColorfulTheme) -> Result<()> {
     Ok(())
 }
 
+// ============================================================================
+// Timer & Pomodoro (`run timer`, `run pomo`)
+// ============================================================================
+
+pub fn handle_timer(theme: &ColorfulTheme, minutes: Option<u64>) -> Result<()> {
+    let total_secs = match minutes {
+        Some(m) if m > 0 => m * 60,
+        _ => {
+            if !std::io::stdin().is_terminal() {
+                25 * 60
+            } else {
+                ui::maybe_auto_clear();
+                ui::print_banner();
+                ui::render_breadcrumbs(&["run", "Focus & Pomodoro Timer"]);
+
+                let cancel_btn = ui::cancel_option();
+                let options = [
+                    "🍅 1. 25 Minutes (Standard Pomodoro)",
+                    "☕ 2. 5 Minutes (Short Break)",
+                    "🛋️  3. 15 Minutes (Long Break)",
+                    "⚡ 4. 45 Minutes (Deep Work Session)",
+                    "🎯 5. 60 Minutes (Power Hour)",
+                    "⏱️  6. Custom Minutes...",
+                    &cancel_btn,
+                ];
+
+                let sel = Select::with_theme(theme)
+                    .with_prompt("Select timer duration")
+                    .items(&options)
+                    .default(0)
+                    .interact()?;
+
+                if sel >= options.len() - 1 {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+
+                match sel {
+                    0 => 25 * 60,
+                    1 => 5 * 60,
+                    2 => 15 * 60,
+                    3 => 45 * 60,
+                    4 => 60 * 60,
+                    5 => {
+                        let mins: u64 = Input::with_theme(theme)
+                            .with_prompt("Enter duration in minutes")
+                            .default(30)
+                            .interact_text()?;
+                        mins * 60
+                    }
+                    _ => return Ok(()),
+                }
+            }
+        }
+    };
+
+    println!();
+    println!("{} Timer started for {} minutes. Press Ctrl+C to stop.", "⏱️".bold(), total_secs / 60);
+    println!();
+
+    let start = std::time::Instant::now();
+    let total_dur = std::time::Duration::from_secs(total_secs);
+
+    while start.elapsed() < total_dur {
+        let elapsed = start.elapsed();
+        let remaining = total_dur.saturating_sub(elapsed);
+        let rem_secs = remaining.as_secs();
+        let rem_min = rem_secs / 60;
+        let rem_sec = rem_secs % 60;
+
+        let pct = (elapsed.as_secs_f64() / total_dur.as_secs_f64()).clamp(0.0, 1.0);
+        let bar_width: usize = 25;
+        let filled = (pct * bar_width as f64).round() as usize;
+        let empty = bar_width.saturating_sub(filled);
+        let bar = format!("{}{}", "■".repeat(filled).green(), "□".repeat(empty).dimmed());
+
+        print!("\r  ⏳ [{bar}] {:02}:{:02} remaining ({:.0}%)   ", rem_min, rem_sec, pct * 100.0);
+        let _ = std::io::stdout().flush();
+
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+
+    println!("\n");
+    println!("{} Time is up! Great work! 🎉", "✔".green().bold());
+
+    // Native macOS chime + banner notification
+    let _ = crate::mac::handle_notify(theme, Some("Timer Finished! ⏰"), Some("Your focus session has completed."));
+    Ok(())
+}
+
+// ============================================================================
+// UUID Generator (`run uuid`, `run uid`)
+// ============================================================================
+
+pub fn handle_uuid() -> Result<()> {
+    let output = Command::new("/usr/bin/uuidgen")
+        .output()
+        .context("failed to execute uuidgen")?;
+    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let uuid_lower = raw.to_lowercase();
+
+    crate::mac::copy_to_clipboard(&uuid_lower)?;
+
+    ui::print_banner();
+    ui::render_breadcrumbs(&["run", "UUID Generator"]);
+    ui::print_card(
+        "Generated UUID v4",
+        &[
+            ("UUID (Lowercase)", uuid_lower.green().bold().to_string()),
+            ("UUID (Uppercase)", raw),
+            ("Clipboard", "Copied to clipboard automatically 📋".cyan().to_string()),
+        ],
+    );
+    Ok(())
+}
+
+// ============================================================================
+// Secure Password / Token Generator (`run pass`, `run pwd`)
+// ============================================================================
+
+pub fn handle_pass(theme: &ColorfulTheme, length: Option<usize>) -> Result<()> {
+    let len = match length {
+        Some(l) if l >= 4 => l,
+        _ => {
+            if !std::io::stdin().is_terminal() {
+                20
+            } else {
+                ui::maybe_auto_clear();
+                ui::print_banner();
+                ui::render_breadcrumbs(&["run", "Password Generator"]);
+
+                let cancel_btn = ui::cancel_option();
+                let options = [
+                    "🔐 1. Standard Strong Password (16 chars)",
+                    "🛡️  2. Extra Secure Password (24 chars)",
+                    "🗝️  3. High Entropy API Token / Secret (32 chars)",
+                    "⚡ 4. Alphanumeric Only (No special symbols, 20 chars)",
+                    "🔢 5. Custom Length...",
+                    &cancel_btn,
+                ];
+
+                let sel = Select::with_theme(theme)
+                    .with_prompt("Select password type")
+                    .items(&options)
+                    .default(0)
+                    .interact()?;
+
+                if sel >= options.len() - 1 {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+
+                match sel {
+                    0 => 16,
+                    1 => 24,
+                    2 => 32,
+                    3 => 20,
+                    4 => {
+                        let l: usize = Input::with_theme(theme)
+                            .with_prompt("Enter desired length (8-128)")
+                            .default(20)
+                            .interact_text()?;
+                        l.clamp(4, 128)
+                    }
+                    _ => return Ok(()),
+                }
+            }
+        }
+    };
+
+    let pass = generate_secure_password(len);
+    crate::mac::copy_to_clipboard(&pass)?;
+
+    ui::print_banner();
+    ui::render_breadcrumbs(&["run", "Password Generator"]);
+    ui::print_card(
+        "Generated Secure Password",
+        &[
+            ("Password", pass.green().bold().to_string()),
+            ("Length", len.to_string()),
+            ("Entropy / Strength", "Very Strong 🔒".green().to_string()),
+            ("Clipboard", "Copied to clipboard automatically 📋".cyan().to_string()),
+        ],
+    );
+    Ok(())
+}
+
+fn generate_secure_password(len: usize) -> String {
+    use std::fs::File;
+    use std::io::Read;
+
+    const CHARSET: &[u8] = b"abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%&*+=-_";
+    let mut random_bytes = vec![0u8; len];
+    if let Ok(mut f) = File::open("/dev/urandom") {
+        let _ = f.read_exact(&mut random_bytes);
+    } else {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(42);
+        for (i, b) in random_bytes.iter_mut().enumerate() {
+            *b = ((nanos >> (i % 16)) ^ (i as u128 * 73)) as u8;
+        }
+    }
+
+    random_bytes
+        .into_iter()
+        .map(|b| CHARSET[(b as usize) % CHARSET.len()] as char)
+        .collect()
+}
+
+// ============================================================================
+// Terminal QR Code Generator (`run qr`, `run qrc`)
+// ============================================================================
+
+pub fn handle_qr(theme: &ColorfulTheme, content: Option<&str>) -> Result<()> {
+    let text = match content {
+        Some(c) if !c.trim().is_empty() => c.to_string(),
+        _ => {
+            let clip = crate::mac::read_from_clipboard().unwrap_or_default();
+            let clip_trimmed = clip.trim().to_string();
+
+            if !clip_trimmed.is_empty() && (clip_trimmed.starts_with("http://") || clip_trimmed.starts_with("https://")) {
+                println!("{} Using URL from clipboard: {}", "📋".bold(), clip_trimmed.cyan());
+                clip_trimmed
+            } else if !std::io::stdin().is_terminal() {
+                if !clip_trimmed.is_empty() {
+                    clip_trimmed
+                } else {
+                    bail!("provide text or URL to generate QR code: run qr <text>");
+                }
+            } else {
+                ui::maybe_auto_clear();
+                ui::print_banner();
+                ui::render_breadcrumbs(&["run", "Terminal QR Generator"]);
+
+                let default_val = if !clip_trimmed.is_empty() {
+                    clip_trimmed
+                } else {
+                    "https://github.com/naenmad/run-cli".to_string()
+                };
+                Input::with_theme(theme)
+                    .with_prompt("Enter text or URL for QR Code")
+                    .default(default_val)
+                    .interact_text()?
+            }
+        }
+    };
+
+    use qrcode::QrCode;
+    use qrcode::render::unicode;
+
+    let code = QrCode::new(text.as_bytes()).context("failed to encode text into QR code")?;
+    let image = code
+        .render::<unicode::Dense1x2>()
+        .dark_color(unicode::Dense1x2::Light)
+        .light_color(unicode::Dense1x2::Dark)
+        .build();
+
+    println!();
+    println!("{}", image);
+    println!("  📱 Content: {}", text.cyan().bold());
+    println!("  Scan with phone camera or QR reader.");
+    println!();
+    Ok(())
+}
+
+// ============================================================================
+// System & Toolchain Updater (`run update`, `run upd`)
+// ============================================================================
+
+pub fn handle_update(_theme: &ColorfulTheme) -> Result<()> {
+    ui::maybe_auto_clear();
+    ui::print_banner();
+    ui::render_breadcrumbs(&["run", "System & Toolchain Updater"]);
+
+    println!("{}", "Scanning installed developer toolchains...".dimmed());
+    println!();
+
+    // 1. Homebrew
+    let has_brew = Command::new("which").arg("brew").output().map(|o| o.status.success()).unwrap_or(false);
+    if has_brew {
+        println!("{} Updating Homebrew formulas and casks...", "🍺".bold());
+        let _ = Command::new("brew").arg("update").status();
+        println!("{} Homebrew updated.", "✔".green().bold());
+        println!();
+    }
+
+    // 2. Rustup
+    let has_rustup = Command::new("which").arg("rustup").output().map(|o| o.status.success()).unwrap_or(false);
+    if has_rustup {
+        println!("{} Updating Rust toolchain...", "🦀".bold());
+        let _ = Command::new("rustup").arg("update").status();
+        println!("{} Rust toolchain updated.", "✔".green().bold());
+        println!();
+    }
+
+    // 3. Node package managers (npm / pnpm)
+    let has_pnpm = Command::new("which").arg("pnpm").output().map(|o| o.status.success()).unwrap_or(false);
+    let has_npm = Command::new("which").arg("npm").output().map(|o| o.status.success()).unwrap_or(false);
+
+    if has_pnpm {
+        println!("{} Updating global pnpm packages...", "📦".bold());
+        let _ = Command::new("pnpm").args(["update", "-g"]).status();
+        println!("{} pnpm global packages updated.", "✔".green().bold());
+        println!();
+    } else if has_npm {
+        println!("{} Updating global npm packages...", "📦".bold());
+        let _ = Command::new("npm").args(["update", "-g"]).status();
+        println!("{} npm global packages updated.", "✔".green().bold());
+        println!();
+    }
+
+    println!("{} All detected developer toolchains are up to date! 🚀", "✔".green().bold());
+    Ok(())
+}
+

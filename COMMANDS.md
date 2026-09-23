@@ -4,7 +4,7 @@
 
 ---
 
-## Command Reference Matrix (61 Commands)
+## Command Reference Matrix (68 Commands)
 
 ### 🍏 macOS Native Interaction Suite
 
@@ -28,6 +28,8 @@
 | `light` | `lit` | - | Set macOS Light Mode |
 | `lock` | `lok` | - | Lock macOS screen immediately |
 | `desktop` | `dkt` | `desk` | Hide or show desktop icons for clean presentations |
+| `dns` | `fls` | `flush` | Flush macOS DNS cache in 1 click (`dscacheutil` + `mDNSResponder`) |
+| `voice` | `say` | `voc` | Native macOS Text-to-Speech synthesis with fun voices |
 
 ### 🛠️ Developer & Workspace Suite
 
@@ -42,6 +44,12 @@
 | `docker` | `dck` | - | Inspect and manage Docker/OrbStack containers, view logs, start or stop |
 | `secret` | `sec` | `dotenv` | Audit local `.env` variables against `.env.example` and generate sanitized templates (`--fix`) |
 | `config` | `cfg` | - | Manage CLI settings, custom primary colors, editor & auto-clear (`run cfg`) |
+| `alias` | `als` | `shortcut` | Define custom command shortcuts (`run alias add c "cargo check"`) with execution fallback |
+| `stats` | `sts` | `analytics` | Terminal usage analytics dashboard with visual frequency bars (`run stats`) |
+| `timer` | `tmr` | `pomo` | Focus Pomodoro / countdown timer with live progress bar and completion chime alert |
+| `uuid` | `uid` | - | Generate UUID v4 and automatically copy to system clipboard |
+| `pass` | `pas` | `password` | Generate cryptographically secure random password/API token and copy to clipboard |
+| `update` | `upd` | `upgrade` | 1-step updater for Homebrew, Rust toolchain, and global Node packages |
 | `network` | `net` | `ip` | Inspect local LAN and public WAN IP addresses with interactive copy to clipboard |
 | `share` | `shr` | - | Instant local HTTP file server on local network (`run share -p 8080`) |
 | `bench` | `bnc` | - | Benchmark command execution duration with high-resolution microsecond timer |
@@ -79,6 +87,7 @@
 
 | Semantic Command | 3-Letter Alias | Unix Aliases | Purpose |
 | :--- | :--- | :--- | :--- |
+| `qr` | `qrc` | - | Render terminal visual Unicode QR code from text, URL, or clipboard |
 | `speedtest` | `spd` | `speed`, `networkQuality` | Measure internet download, upload throughput and responsiveness |
 | `port` | `prt` | `lsof` | Check active listening TCP ports and sockets |
 | `fetch` | `fch` | `curl`, `wget`, `get` | Fetch HTTP response or download file locally with progress bar |
@@ -536,6 +545,78 @@ run lok
 run desk hide
 run desk show
 run desk
+```
+
+#### 15. DNS Cache Flusher (`run dns`, `run flush`, `run fls`)
+```bash
+# Instant 1-click macOS DNS flush:
+run dns
+run flush
+run fls
+```
+
+#### 16. Native Voice Text-to-Speech (`run voice`, `run say`, `run voc`)
+```bash
+# Direct speech synthesis:
+run voice "Build finished successfully"
+run say "Welcome back master"
+
+# Custom voice personality (Samantha, Zarvox, Whisper, Fred, Bad News, etc.):
+run voice "Alert! Deploy error" -v "Bad News"
+run say "System online" --voice Zarvox
+
+# Interactive voice picker & text prompt:
+run voice
+run say
+```
+
+### 12. ⚡ Productivity Essentials (Timer, UUID, Pass, QR, Update)
+
+#### 1. Focus & Pomodoro Timer (`run timer`, `run pomo`, `run tmr`)
+```bash
+# Direct 25-minute Pomodoro timer with live progress bar & chime alert:
+run timer 25
+run pomo
+run tmr 45
+
+# Interactive duration presets (5m, 15m, 25m, 45m, 60m, or Custom):
+run timer
+```
+
+#### 2. Instant UUID Generator (`run uuid`, `run uid`)
+```bash
+# Generate UUID v4 and copy to clipboard automatically:
+run uuid
+run uid
+```
+
+#### 3. Cryptographic Password & Token Generator (`run pass`, `run pas`)
+```bash
+# Generate secure password with automatic clipboard copy:
+run pass 24
+run pass 32
+run pas
+
+# Interactive presets (16-char strong, 24-char extra secure, 32-char token, alphanumeric):
+run pass
+```
+
+#### 4. Terminal Visual QR Code Generator (`run qr`, `run qrc`)
+```bash
+# Generate visual Unicode QR code in terminal from direct URL or text:
+run qr https://github.com/naenmad/run-cli
+run qr "WIFI:S:MyNetwork;T:WPA;P:MySecret;;"
+
+# Automatically uses URL from clipboard if omitted, or prompts interactively:
+run qr
+run qrc
+```
+
+#### 5. One-Step System & Stack Updater (`run update`, `run upd`)
+```bash
+# Update Homebrew, Rust toolchain, and global Node packages in 1 step:
+run update
+run upd
 ```
 
 ---

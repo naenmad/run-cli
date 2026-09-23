@@ -1420,3 +1420,128 @@ pub fn handle_desktop(theme: &ColorfulTheme, action: Option<&str>) -> Result<()>
     }
     Ok(())
 }
+
+// ============================================================================
+// 16. Clipboard Integration Helpers
+// ============================================================================
+
+pub fn copy_to_clipboard(text: &str) -> Result<()> {
+    let mut child = Command::new("pbcopy")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .context("failed to spawn pbcopy")?;
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        stdin.write_all(text.as_bytes())?;
+    }
+    child.wait()?;
+    Ok(())
+}
+
+pub fn read_from_clipboard() -> Result<String> {
+    let output = Command::new("pbpaste")
+        .output()
+        .context("failed to execute pbpaste")?;
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+// ============================================================================
+// 17. DNS Cache Flusher (`run dns`, `run flush`)
+// ============================================================================
+
+pub fn handle_dns(_theme: &ColorfulTheme) -> Result<()> {
+    ui::maybe_auto_clear();
+    println!("{}", "Flushing macOS DNS cache...".dimmed());
+
+    let st1 = Command::new("dscacheutil").arg("-flushcache").status();
+    let st2 = Command::new("killall").args(["-HUP", "mDNSResponder"]).status();
+
+    if (st1.is_ok() && st1.unwrap().success()) || (st2.is_ok() && st2.unwrap().success()) {
+        println!("{} macOS DNS cache flushed successfully! 🌐", "✔".green().bold());
+    } else {
+        println!("{} Standard flush attempted. If issues persist, run: sudo dscacheutil -flushcache", "●".yellow());
+    }
+    Ok(())
+}
+
+// ============================================================================
+// 18. Native Text-to-Speech (`run voice`, `run say`)
+// ============================================================================
+
+pub fn handle_voice(theme: &ColorfulTheme, text: Option<&str>, voice: Option<&str>) -> Result<()> {
+    let to_say = match text {
+        Some(t) if !t.trim().is_empty() => t.to_string(),
+        _ => {
+            if !std::io::stdin().is_terminal() {
+                "Hello from run CLI!".to_string()
+            } else {
+                ui::maybe_auto_clear();
+                ui::print_banner();
+                ui::render_breadcrumbs(&["run", "Voice Text-to-Speech"]);
+
+                Input::with_theme(theme)
+                    .with_prompt("Enter text to speak")
+                    .default("Hello! Antigravity run-cli is awesome.".to_string())
+                    .interact_text()?
+            }
+        }
+    };
+
+    let selected_voice = match voice {
+        Some(v) => Some(v.to_string()),
+        None => {
+            if std::io::stdin().is_terminal() && text.is_none() {
+                let cancel_btn = cancel_option();
+                let voice_options = [
+                    "Default System Voice",
+                    "Samantha (Natural US)",
+                    "Fred (Classic Mac)",
+                    "Zarvox (Sci-Fi Robot)",
+                    "Whisper (Quiet)",
+                    "Bad News (Doom)",
+                    "Good News (Heroic)",
+                    "Junior (Little Kid)",
+                    "Cellos (Singing)",
+                    &cancel_btn,
+                ];
+                let sel = Select::with_theme(theme)
+                    .with_prompt("Select voice personality")
+                    .items(&voice_options)
+                    .default(0)
+                    .interact()?;
+
+                if sel >= voice_options.len() - 1 {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+
+                match sel {
+                    0 => None,
+                    1 => Some("Samantha".to_string()),
+                    2 => Some("Fred".to_string()),
+                    3 => Some("Zarvox".to_string()),
+                    4 => Some("Whisper".to_string()),
+                    5 => Some("Bad News".to_string()),
+                    6 => Some("Good News".to_string()),
+                    7 => Some("Junior".to_string()),
+                    8 => Some("Cellos".to_string()),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        }
+    };
+
+    println!("{} Speaking: \"{}\"", "🗣️".bold(), to_say.cyan());
+    let mut cmd = Command::new("say");
+    if let Some(ref v) = selected_voice {
+        cmd.args(["-v", v]);
+    }
+    cmd.arg(&to_say);
+    let status = cmd.status().context("failed to execute say command")?;
+    if !status.success() {
+        bail!("failed to speak text via macOS say");
+    }
+    Ok(())
+}

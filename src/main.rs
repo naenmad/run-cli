@@ -493,6 +493,49 @@ enum Commands {
         action: Option<String>,
     },
 
+    /// Terminal Pomodoro and focus countdown timer with macOS chime alert
+    #[command(name = "timer", alias = "tmr", alias = "pomo")]
+    Timer {
+        /// Duration in minutes
+        minutes: Option<u64>,
+    },
+
+    /// Generate UUID v4 and copy directly to clipboard
+    #[command(name = "uuid", alias = "uid")]
+    Uuid,
+
+    /// Generate secure random password/token and copy to clipboard
+    #[command(name = "pass", alias = "pas", alias = "password")]
+    Pass {
+        /// Length of password (default: 20)
+        length: Option<usize>,
+    },
+
+    /// Flush macOS DNS cache
+    #[command(name = "dns", alias = "fls", alias = "flush")]
+    Dns,
+
+    /// Generate terminal visual Unicode QR code from text, URL, or clipboard
+    #[command(name = "qr", alias = "qrc")]
+    Qr {
+        /// Text or URL to encode
+        content: Option<String>,
+    },
+
+    /// One-step update for Homebrew, Rustup, and Node toolchains
+    #[command(name = "update", alias = "upd", alias = "upgrade")]
+    Update,
+
+    /// Native macOS Text-to-Speech synthesis (say command wrapper)
+    #[command(name = "voice", alias = "say", alias = "voc")]
+    Voice {
+        /// Text to speak aloud
+        text: Option<String>,
+        /// Optional voice personality name (e.g. Samantha, Zarvox, Whisper, Fred)
+        #[arg(short, long)]
+        voice: Option<String>,
+    },
+
     /// Display complete command reference and usage tutorial
     #[command(name = "help", alias = "doc", alias = "guide")]
     Help {
@@ -894,6 +937,48 @@ const ALL_COMMANDS: &[CommandInfo] = &[
         description: "Hide or show desktop icons for clean presentations",
     },
     CommandInfo {
+        name: "timer",
+        alias_3: "tmr",
+        aliases: &["tmr", "pomo"],
+        description: "Focus countdown timer with progress & chime alert",
+    },
+    CommandInfo {
+        name: "uuid",
+        alias_3: "uid",
+        aliases: &["uid"],
+        description: "Generate UUID v4 & auto-copy to clipboard",
+    },
+    CommandInfo {
+        name: "pass",
+        alias_3: "pas",
+        aliases: &["pas", "password"],
+        description: "Generate secure password/token & copy to clipboard",
+    },
+    CommandInfo {
+        name: "dns",
+        alias_3: "fls",
+        aliases: &["fls", "flush"],
+        description: "Flush macOS DNS cache (dscacheutil + mDNSResponder)",
+    },
+    CommandInfo {
+        name: "qr",
+        alias_3: "qrc",
+        aliases: &["qrc"],
+        description: "Render terminal visual Unicode QR code from text or clipboard",
+    },
+    CommandInfo {
+        name: "update",
+        alias_3: "upd",
+        aliases: &["upd", "upgrade"],
+        description: "Update Homebrew, Rustup, and Node toolchains in 1 step",
+    },
+    CommandInfo {
+        name: "voice",
+        alias_3: "say",
+        aliases: &["say", "voc"],
+        description: "macOS Text-to-Speech synthesis with fun voices",
+    },
+    CommandInfo {
         name: "help",
         alias_3: "doc",
         aliases: &["doc", "guide"],
@@ -1156,7 +1241,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .filter(|c| {
                 [
                     "project", "dev", "build", "test", "clean", "sync", "network", "share",
-                    "bench", "docker", "secret", "config", "alias", "stats",
+                    "bench", "docker", "secret", "config", "alias", "stats", "update", "uuid", "pass", "timer",
                 ]
                 .contains(&c.name)
             })
@@ -1168,7 +1253,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
                 [
                     "wifi", "bluetooth", "airpods", "airdrop", "music", "volume", "note",
                     "fixapp", "battery", "awake", "peek", "trash", "shot", "notify", "dark",
-                    "light", "lock", "desktop",
+                    "light", "lock", "desktop", "voice", "dns",
                 ]
                 .contains(&c.name)
             })
@@ -1190,7 +1275,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .filter(|c| {
                 [
                     "battery", "awake", "process", "kill", "disk", "whoami", "time", "history",
-                    "which", "env", "lock", "dark", "light",
+                    "which", "env", "lock", "dark", "light", "timer",
                 ]
                 .contains(&c.name)
             })
@@ -1201,7 +1286,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .filter(|c| {
                 [
                     "wifi", "bluetooth", "airpods", "airdrop", "port", "fetch", "ping", "pack",
-                    "unpack", "speedtest", "notify", "shot", "completion",
+                    "unpack", "speedtest", "notify", "shot", "completion", "qr", "dns", "uuid", "pass",
                 ]
                 .contains(&c.name)
             })
@@ -1348,6 +1433,15 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
         Commands::Light => mac::handle_light(theme),
         Commands::Lock => mac::handle_lock(),
         Commands::Desktop { action } => mac::handle_desktop(theme, action.as_deref()),
+        Commands::Timer { minutes } => commands::handle_timer(theme, minutes),
+        Commands::Uuid => commands::handle_uuid(),
+        Commands::Pass { length } => commands::handle_pass(theme, length),
+        Commands::Dns => mac::handle_dns(theme),
+        Commands::Qr { content } => commands::handle_qr(theme, content.as_deref()),
+        Commands::Update => commands::handle_update(theme),
+        Commands::Voice { text, voice } => {
+            mac::handle_voice(theme, text.as_deref(), voice.as_deref())
+        }
         Commands::Help { command } => handle_help(command.as_deref()),
     }
 }
@@ -1439,6 +1533,13 @@ fn run_app() -> Result<()> {
                 Commands::Light => "light",
                 Commands::Lock => "lock",
                 Commands::Desktop { .. } => "desktop",
+                Commands::Timer { .. } => "timer",
+                Commands::Uuid => "uuid",
+                Commands::Pass { .. } => "pass",
+                Commands::Dns => "dns",
+                Commands::Qr { .. } => "qr",
+                Commands::Update => "update",
+                Commands::Voice { .. } => "voice",
                 Commands::Help { .. } => "help",
             };
             config::record_command_stat(cmd_name);
@@ -4313,6 +4414,98 @@ mod tests {
             Ok(Cli {
                 command: Some(Commands::Battery)
             })
+        ));
+
+        // Low Effort, High Return Suite tests
+        assert!(matches!(
+            Cli::try_parse_from(["run", "timer", "25"]),
+            Ok(Cli {
+                command: Some(Commands::Timer { minutes: Some(25) })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "pomo"]),
+            Ok(Cli {
+                command: Some(Commands::Timer { minutes: None })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "uuid"]),
+            Ok(Cli {
+                command: Some(Commands::Uuid)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "uid"]),
+            Ok(Cli {
+                command: Some(Commands::Uuid)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "pass", "32"]),
+            Ok(Cli {
+                command: Some(Commands::Pass { length: Some(32) })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "pas"]),
+            Ok(Cli {
+                command: Some(Commands::Pass { length: None })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "dns"]),
+            Ok(Cli {
+                command: Some(Commands::Dns)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "flush"]),
+            Ok(Cli {
+                command: Some(Commands::Dns)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "qr", "https://github.com"]),
+            Ok(Cli {
+                command: Some(Commands::Qr { ref content })
+            }) if content.as_deref() == Some("https://github.com")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "update"]),
+            Ok(Cli {
+                command: Some(Commands::Update)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "upd"]),
+            Ok(Cli {
+                command: Some(Commands::Update)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "voice", "Hello world"]),
+            Ok(Cli {
+                command: Some(Commands::Voice { ref text, voice: None })
+            }) if text.as_deref() == Some("Hello world")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "say", "Test", "--voice", "Zarvox"]),
+            Ok(Cli {
+                command: Some(Commands::Voice { ref text, ref voice })
+            }) if text.as_deref() == Some("Test") && voice.as_deref() == Some("Zarvox")
         ));
     }
 

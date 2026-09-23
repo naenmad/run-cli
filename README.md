@@ -123,7 +123,7 @@ custom_hubs = [
 
 ## 🎯 Command Cheatsheet
 
-`run` includes **61 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
+`run` includes **68 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
 
 ### 🍏 macOS Native Interaction Suite (Dual-Mode: Direct & Interactive)
 | Command | Alias | Additional Aliases | Purpose & Highlights |
@@ -146,6 +146,8 @@ custom_hubs = [
 | `light` | `lit` | - | Set macOS Light Mode (`run light`) |
 | `lock` | `lok` | - | Lock macOS screen immediately (`run lock`) |
 | `desktop` | `dkt` | `desk` | Hide or show desktop icons for clean presentations (`run desk hide`, `run desk show`) |
+| `dns` | `fls` | `flush` | Flush macOS DNS cache in 1 click (`dscacheutil` + `mDNSResponder`) (`run dns`) |
+| `voice` | `say` | `voc` | Native macOS Text-to-Speech synthesis with fun voices (`run voice "Hello"`, `run say "Hi" -v Zarvox`) |
 
 ### 🛠️ Developer & Workspace Suite
 | Command | Alias | Purpose & Highlights |
@@ -161,6 +163,10 @@ custom_hubs = [
 | `config` | `cfg` | Manage CLI settings, custom primary colors, editor & auto-clear (`run cfg`) |
 | `alias` | `als`, `shortcut` | Define custom command shortcuts (`run alias add c "cargo check"`) with execution fallback |
 | `stats` | `sts`, `analytics` | Terminal usage analytics dashboard with visual frequency bars (`run stats`) |
+| `timer` | `tmr`, `pomo` | Focus Pomodoro / countdown timer with live progress bar and completion chime alert (`run timer 25`) |
+| `uuid` | `uid` | Generate UUID v4 and automatically copy to system clipboard (`run uuid`) |
+| `pass` | `pas`, `password` | Generate cryptographically secure random password/API token and copy to clipboard (`run pass 24`) |
+| `update` | `upd`, `upgrade` | 1-step updater for Homebrew, Rust toolchain, and global Node packages (`run upd`) |
 | `network` | `net`, `ip` | Inspects local LAN (en0/en1) and public WAN IP with interactive clipboard copy |
 | `share` | `shr` | Instant local HTTP file server on LAN (`run share -p 8080`) |
 | `bench` | `bnc` | Microsecond-precision command execution benchmark timer |
@@ -196,6 +202,7 @@ custom_hubs = [
 ### 🌐 Network & Archive
 | Command | Alias | Unix Alias | Purpose |
 | :--- | :--- | :--- | :--- |
+| `qr` | `qrc` | - | Render terminal visual Unicode QR code from text, URL, or clipboard (`run qr`) |
 | `speedtest` | `spd`, `speed` | `networkQuality` | Measure internet download, upload throughput and responsiveness |
 | `fetch` | `fch` | `curl`, `wget` | Fetch HTTP response headers/body or download files with progress bar |
 | `ping` | `png` | - | Test host latency with packet summary |
