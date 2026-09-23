@@ -1,313 +1,145 @@
 # Command Reference & Tutorial: `run` CLI
 
-This document is the complete reference guide and tutorial for the `run` CLI utility.
+`run` is a clean, human-friendly macOS productivity CLI built in Rust. Every command provides a full semantic English verb/noun, an exact 3-letter alias, and standard Unix alias compatibility for effortless workflow integration.
 
 ---
 
-## Command Reference
+## Command Reference Matrix
 
-Every command supports its standard full verb and an exact 3-letter alias.
-
-### 1. `make` (Alias: `mak`)
-Creates directories or empty files.
-
-* **Direct Mode:**
-  * Create folder (creates parent directories automatically):
-    ```bash
-    run make folder path/to/new_dir
-    # or with alias:
-    run mak folder path/to/new_dir
-    ```
-  * Create empty file (creates parent directories if needed):
-    ```bash
-    run make file path/to/file.txt
-    # or with alias:
-    run mak file path/to/file.txt
-    ```
-* **Interactive Mode:**
-  Run without arguments to choose the type and enter the path:
-  ```bash
-  run mak
-  # 1. Select Folder or File using arrow keys
-  # 2. Type target path when prompted
-  ```
-
----
-
-### 2. `open` (Alias: `opn`)
-Launches macOS applications using the native `open -a` subsystem.
-
-* **Direct Mode:**
-  ```bash
-  run open Safari
-  # or with alias:
-  run opn "Visual Studio Code"
-  ```
-* **Interactive Mode:**
-  ```bash
-  run opn
-  # Prompts: Application name:
-  ```
-
----
-
-### 3. `copy` (Alias: `cpy`)
-Copies a file or an entire directory tree.
-
-* **Direct Mode:**
-  ```bash
-  # Copy file
-  run copy document.pdf backup.pdf
-
-  # Copy directory recursively
-  run cpy src/ backup_src/
-  ```
-* **Interactive Mode:**
-  ```bash
-  run cpy
-  # Prompts:
-  # Source path:
-  # Destination path:
-  ```
-
----
-
-### 4. `move` (Alias: `mov`)
-Moves or renames files and directories.
-
-* **Direct Mode:**
-  ```bash
-  # Rename file
-  run move draft.txt final.txt
-
-  # Move folder into another directory
-  run mov assets/ public/assets/
-  ```
-* **Interactive Mode:**
-  ```bash
-  run mov
-  # Prompts:
-  # Source path:
-  # Destination path:
-  ```
-
----
-
-### 5. `del` (Alias: `dlt`)
-Deletes a file or an entire directory tree. Always prompts for confirmation before proceeding.
-
-* **Direct Mode:**
-  ```bash
-  run del temp.log
-  # or with alias:
-  run dlt build_output/
-  ```
-  Even in direct mode, you must confirm:
-  ```text
-  Delete file 'temp.log'? [y/N]
-  ```
-* **Interactive Mode:**
-  ```bash
-  run dlt
-  # 1. Enter path to delete
-  # 2. Confirm deletion [y/N]
-  ```
-
----
-
-### 6. `clear` (Alias: `clr`)
-Clears the terminal viewport.
-
-* **Usage:**
-  ```bash
-  run clear
-  # or with alias:
-  run clr
-  ```
-
----
-
-### 7. `go` (Alias: `jmp`, `nav`)
-Smart directory navigation that replaces manual `cd` commands.
-
-* **Jump to Home (`root`):**
-  ```bash
-  run go root
-  # or with alias:
-  run jmp root
-  ```
-* **Step Back to Parent Directory (`back`):**
-  ```bash
-  run go back
-  # or with alias:
-  run jmp back
-  ```
-* **Jump to Child or Nested Folder:**
-  ```bash
-  run go code
-  # or with alias:
-  run jmp src
-  ```
-* **Interactive Mode (Folder Picker):**
-  Run without arguments to display an interactive menu of subdirectories and home/parent shortcuts:
-  ```bash
-  run go
-  # or with alias:
-  run jmp
-  ```
-
-> Note: To enable in-place directory switching in your active terminal, add this to your `~/.zshrc`:
-> ```bash
-> eval "$(run init)"
-> ```
-
----
-
-### 8. `project` (Alias: `prj`)
-Smart project scanner and interactive IDE launcher.
-
-* **Global Scan Mode:**
-  Scans development hubs (`~/Developer`, `~/Projects`, `~/Code`, `~/Documents`, `~/Desktop`) for projects (`.git`, `Cargo.toml`, `package.json`, `pubspec.yaml`, etc.):
-  ```bash
-  run project
-  # or with alias:
-  run prj
-  ```
-  1. Pick a detected project from the interactive list (or select `Cancel`).
-  2. Pick the target editor (`Visual Studio Code`, `Cursor`, `Xcode`, `Hanya Pindah Terminal / Saja`, or `Cancel`).
-
-* **Contextual Current Directory Mode:**
-  Open the current directory directly:
-  ```bash
-  run project .
-  # or with alias:
-  run prj .
-  ```
-
-* **Query Search Mode:**
-  Open or jump to a project by name:
-  ```bash
-  run prj run-cli
-  ```
-
----
-
-### 9. `dev` (Alias: `dev`)
-Runs the development server for the current active project based on detected file signatures:
-- `Cargo.toml`: `cargo run`
-- `package.json`: `pnpm run dev`, `yarn dev`, `bun run dev`, or `npm run dev`
-- `pubspec.yaml`: `flutter run`
-- `go.mod`: `go run .`
-- `Makefile`: `make dev`
-
-* **Usage:**
-  ```bash
-  run dev
-  ```
-
----
-
-### 10. `build` (Alias: `bld`)
-Builds and compiles the current active project based on detected file signatures:
-- `Cargo.toml`: `cargo build --release`
-- `package.json`: `npm run build` (or pnpm/yarn/bun)
-- `pubspec.yaml`: `flutter build`
-- `go.mod`: `go build .`
-- `Makefile`: `make build`
-
-* **Usage:**
-  ```bash
-  run build
-  # or with alias:
-  run bld
-  ```
-
----
-
-### 11. `init` (Alias: `ini`)
-Generates the shell integration script for `~/.zshrc` or `~/.bashrc`. Enables in-place directory switching for `go` and `project`.
-
-* **Usage:**
-  ```bash
-  eval "$(run init)"
-  ```
-
----
-
-### 12. `help` (Alias: `guide`)
-Displays this comprehensive reference and tutorial in the terminal.
-
-* **Usage:**
-  ```bash
-  run help
-  # or view specific command documentation:
-  run help project
-  run help dev
-  run help build
-  ```
+| Semantic Command | 3-Letter Alias | Unix Aliases | Purpose |
+| :--- | :--- | :--- | :--- |
+| `make` | `mak` | `touch`, `mkdir` | Create folders or empty files with parent auto-creation |
+| `remove` | `rmv` | `rm`, `del`, `dlt` | Safely delete files or directories with confirmation |
+| `copy` | `cpy` | `cp` | Copy files or directory trees recursively |
+| `move` | `mov` | `mv` | Move or rename files and directories |
+| `list` | `lst` | `ls` | List directory contents with formatted sizes |
+| `path` | `pth` | `pwd` | Print or copy current working directory path |
+| `go` | `jmp` | `cd`, `nav` | Smart directory jump, root/back shortcuts, and fuzzy hub navigation |
+| `read` | `red` | `cat` | Inspect file contents directly |
+| `find` | `fnd` | `grep`, `search` | Search pattern or text across files recursively |
+| `permit` | `prm` | `chmod` | Change file permissions with presets (755, 644, +x) |
+| `process` | `prc` | `ps`, `top` | Inspect active processes or display resource usage snapshot |
+| `kill` | `kil` | `stop`, `stp` | Terminate process with search & confirmation |
+| `disk` | `dsk` | `df`, `du` | Inspect disk free space or directory usage |
+| `whoami` | `who` | `user`, `usr` | Display user identity, UID, GID, and hostname |
+| `time` | `tim` | `date`, `dat` | Display current date and time |
+| `history` | `his` | - | Display recent shell command history |
+| `which` | `whc` | `loc` | Locate executable binary in system PATH |
+| `env` | `env` | - | Inspect or search environment variables |
+| `port` | `prt` | `lsof` | Check active listening TCP ports and sockets |
+| `fetch` | `fch` | `curl`, `wget`, `get` | Fetch HTTP response or download file locally with progress |
+| `ping` | `png` | - | Test network host latency |
+| `pack` | `pck` | `tar`, `zip` | Create compressed archive (.tar.gz or .zip) |
+| `unpack` | `upk` | `unzip`, `untar` | Extract compressed archive (.zip or .tar.gz) |
+| `project` | `prj` | - | Scan workspace projects and open in IDE or terminal |
+| `dev` | `dev` | - | Run active project development server |
+| `build` | `bld` | - | Compile active project in release mode |
+| `open` | `opn` | - | Launch macOS applications (via `open -a`) |
+| `clear` | `clr` | - | Clear terminal screen |
+| `init` | `ini` | - | Generate shell integration wrapper for `~/.zshrc` |
+| `help` | `doc` | `guide` | Interactive terminal documentation |
 
 ---
 
 ## Cancellation Standard
 
 All interactive prompts and menus adhere to a strict cancellation standard:
-- **Interactive selection menus** (`make`, `go`, `project`): The last option is always `Cancel`. Selecting it immediately aborts the action and outputs `Cancelled.`.
-- **Text prompts** (`open`, `copy`, `move`, `del`): Configured with `(leave blank to cancel)`. Pressing Enter without input immediately aborts the action.
-- **Confirmation dialogs** (`del`): Defaults to `[y/N]` (No). Pressing Enter or `n` immediately aborts the action.
+- **Interactive selection menus** (`make`, `go`, `project`, `kill`, `disk`, `port`, `pack`, `unpack`, `permit`, `ping`): The last option is always `Cancel`. Selecting it immediately aborts the action and prints `Cancelled.`.
+- **Text prompts** (`open`, `copy`, `move`, `remove`, `find`, `fetch`, `which`): Configured with `(leave blank to cancel)`. Pressing Enter on empty input aborts without changes.
+- **Confirmation dialogs** (`remove`, `kill`): Defaults to `[y/N]` (No). Pressing Enter or `n` cancels immediately.
 
 ---
 
-## Quickstart Tutorial
+## Usage Examples
 
-### Scenario 1: Scaffold a New Project Structure
-Use `mak` to create directories and files without worrying about flags:
+### 1. Workspace & Development
 ```bash
-# 1. Create nested source folder
-run mak folder my_project/src
+# Scan hubs and choose project + IDE (VS Code, Cursor, Xcode, Terminal)
+run prj
 
-# 2. Create entry file
-run mak file my_project/src/index.js
+# Open current directory in IDE picker
+run prj .
 
-# 3. Create readme file
-run mak file my_project/README.md
+# Run development server (auto-detects Cargo.toml, package.json, flutter, etc.)
+run dev
+
+# Compile active project
+run bld
 ```
 
-### Scenario 2: Backup and Reorganize Assets
-Use `cpy` and `mov` to duplicate and restructure:
-```bash
-# 1. Duplicate source folder for backup
-run cpy my_project/src my_project/src_backup
-
-# 2. Rename or move documentation
-run mov my_project/README.md my_project/DOCS.md
-```
-
-### Scenario 3: Clean Up Safely
-Use `dlt` to clean up temporary artifacts with built-in safety prompts:
-```bash
-run dlt my_project/src_backup
-# Press 'y' to confirm, or 'n' / Enter to cancel
-```
-
-### Scenario 4: Fast App Launching
-Open desktop tools straight from your terminal workflow:
-```bash
-run opn Safari
-run opn "Google Chrome"
-```
-
-### Scenario 5: Smart Directory Navigation
-Quickly jump around directories without typing path slashes or cd:
+### 2. Filesystem & Navigation
 ```bash
 # Jump to user home
-run go root
+run jmp root
 
-# Move into project subfolder
-run go src
+# Step back to parent directory
+run jmp back
 
-# Step back to parent folder
-run go back
+# Fuzzy jump to project or subfolder
+run jmp run-cli
 
-# Open interactive folder picker
-run go
+# Print current directory (or run pth -i to copy to clipboard)
+run pth
+
+# List files and folders with sizes
+run lst
+run lst -a -l
+
+# Create folder or file (unified mkdir & touch: direct path or typed)
+run mak src/utils/token.ts
+run mak src/utils/
+run mak folder src/utils
+run mak file src/utils/token.ts
+
+# Inspect file contents (unified cat)
+run red Cargo.toml
+
+# Search text across files (unified grep)
+run fnd "handle_project" src/
+
+# Safely delete file or directory (unified rm & del)
+run rmv target_file.txt
+```
+
+### 3. System & Processes
+```bash
+# Inspect processes or view resource snapshot
+run prc
+run prc -s
+
+# Terminate process with search and confirmation
+run kil 1234
+run kil Safari
+
+# Check disk space and folder usage (unified df & du)
+run dsk
+run dsk src/
+
+# Display current user and host
+run who
+
+# Display current date and time
+run tim
+
+# Search environment variables
+run env PATH
+```
+
+### 4. Networking & Archives
+```bash
+# Check what is listening on port 3000 (unified lsof)
+run prt 3000
+
+# Download file or fetch HTTP response (unified curl & wget)
+run fch https://api.github.com
+run fch https://example.com/archive.zip -o output.zip
+
+# Ping host
+run png 1.1.1.1
+
+# Create archive (unified tar & zip)
+run pck backup.tar.gz src/
+
+# Extract archive (unified unzip & untar)
+run upk backup.tar.gz
 ```

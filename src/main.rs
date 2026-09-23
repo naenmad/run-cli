@@ -5,10 +5,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{bail, Context, Result};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use colored::Colorize;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Input, Select};
+
+mod commands;
 
 #[derive(Parser)]
 #[command(name = "run")]
@@ -22,24 +24,36 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Create a new folder or file directly or through an interactive menu
-    #[command(alias = "mak")]
+    #[command(name = "make", alias = "mak", aliases = ["mkdir", "touch"])]
     Make {
-        /// Target type to create
-        #[arg(value_enum)]
-        target_type: Option<MakeTargetType>,
-        /// Name or path of the target item
+        /// Target type ('folder'/'file') or path to create directly
+        item: Option<String>,
+        /// Name or path if target type was specified first
         name: Option<PathBuf>,
+        /// Explicitly create as file
+        #[arg(short = 'f', long)]
+        file: bool,
+        /// Explicitly create as folder
+        #[arg(short = 'd', long)]
+        folder: bool,
+    },
+
+    /// Remove a file or directory with safe confirmation
+    #[command(name = "remove", alias = "rmv", aliases = ["del", "dlt", "rm", "delete"])]
+    Remove {
+        /// Path of the file or folder to delete
+        target: Option<PathBuf>,
     },
 
     /// Open a macOS application using open -a
-    #[command(alias = "opn")]
+    #[command(name = "open", alias = "opn")]
     Open {
         /// Target application name
         target: Option<String>,
     },
 
     /// Copy a file or folder from source to destination
-    #[command(name = "copy", alias = "cpy")]
+    #[command(name = "copy", alias = "cpy", alias = "cp")]
     Copy {
         /// Source file or folder
         source: Option<PathBuf>,
@@ -48,7 +62,7 @@ enum Commands {
     },
 
     /// Move or rename a file or folder
-    #[command(name = "move", alias = "mov")]
+    #[command(name = "move", alias = "mov", alias = "mv")]
     Move {
         /// Source file or folder
         source: Option<PathBuf>,
@@ -56,22 +70,168 @@ enum Commands {
         destination: Option<PathBuf>,
     },
 
-    /// Delete a file or folder with safe confirmation
-    #[command(name = "del", alias = "dlt", alias = "delete")]
-    Del {
-        /// Path of the file or folder to delete
-        target: Option<PathBuf>,
-    },
-
     /// Clear the terminal screen
     #[command(name = "clear", alias = "clr")]
     Clear,
 
     /// Smart directory navigation (root, back, subfolder, or interactive menu)
-    #[command(name = "go", alias = "jmp", alias = "nav")]
+    #[command(name = "go", alias = "jmp", aliases = ["nav", "cd"])]
     Go {
         /// Target folder name, 'root', or 'back'
         target: Option<String>,
+    },
+
+    /// List directory contents
+    #[command(name = "list", alias = "lst", alias = "ls")]
+    List {
+        /// Target directory path
+        path: Option<PathBuf>,
+        /// Show hidden entries
+        #[arg(short = 'a', long)]
+        all: bool,
+        /// Long listing format
+        #[arg(short = 'l', long)]
+        long: bool,
+    },
+
+    /// Print current working directory path
+    #[command(name = "path", alias = "pth", alias = "pwd")]
+    Path {
+        /// Interactive mode with clipboard copy option
+        #[arg(short, long)]
+        interactive: bool,
+    },
+
+    /// Display file contents
+    #[command(name = "read", alias = "red", alias = "cat")]
+    Read {
+        /// Path to file
+        path: Option<PathBuf>,
+    },
+
+    /// Search pattern or text across files
+    #[command(name = "find", alias = "fnd", aliases = ["grep", "search"])]
+    Find {
+        /// Search pattern
+        pattern: Option<String>,
+        /// Target file or directory
+        path: Option<PathBuf>,
+    },
+
+    /// Inspect running processes or system resource snapshot
+    #[command(name = "process", alias = "prc", aliases = ["ps", "top"])]
+    Process {
+        /// Filter by process name or user
+        filter: Option<String>,
+        /// Show resource usage snapshot
+        #[arg(short, long)]
+        snapshot: bool,
+    },
+
+    /// Terminate process by PID or name
+    #[command(name = "kill", alias = "kil", aliases = ["stop", "stp"])]
+    Kill {
+        /// Process PID or name
+        target: Option<String>,
+        /// Force kill with SIGKILL (-9)
+        #[arg(short = 'f', long)]
+        force: bool,
+    },
+
+    /// Inspect active network ports and listening sockets
+    #[command(name = "port", alias = "prt", alias = "lsof")]
+    Port {
+        /// Port to query (e.g. 3000, 8080)
+        port: Option<String>,
+    },
+
+    /// Fetch URL response or download file locally
+    #[command(name = "fetch", alias = "fch", aliases = ["get", "dwn", "curl", "wget"])]
+    Fetch {
+        /// URL to request or download
+        url: Option<String>,
+        /// Output file path for download
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Fetch headers only
+        #[arg(short = 'i', long)]
+        headers: bool,
+    },
+
+    /// Inspect disk free space or directory usage
+    #[command(name = "disk", alias = "dsk", aliases = ["df", "du"])]
+    Disk {
+        /// Target directory to inspect usage
+        path: Option<PathBuf>,
+        /// Calculate usage instead of free space
+        #[arg(short, long)]
+        usage: bool,
+    },
+
+    /// Create compressed archive (.tar.gz or .zip)
+    #[command(name = "pack", alias = "pck", aliases = ["tar", "zip"])]
+    Pack {
+        /// Archive name
+        archive: Option<PathBuf>,
+        /// Target folder or file
+        target: Option<PathBuf>,
+    },
+
+    /// Extract compressed archive (.zip or .tar.gz)
+    #[command(name = "unpack", alias = "upk", aliases = ["unzip", "untar"])]
+    Unpack {
+        /// Archive file path
+        archive: Option<PathBuf>,
+        /// Destination directory
+        destination: Option<PathBuf>,
+    },
+
+    /// Change file or directory permissions
+    #[command(name = "permit", alias = "prm", alias = "chmod")]
+    Permit {
+        /// Permission mode (e.g. 755, 644, +x)
+        mode: Option<String>,
+        /// Target file or folder
+        path: Option<PathBuf>,
+    },
+
+    /// Test network host latency
+    #[command(name = "ping", alias = "png")]
+    Ping {
+        /// Target host or IP
+        host: Option<String>,
+    },
+
+    /// Print current username and system identity
+    #[command(name = "whoami", alias = "who", aliases = ["user", "usr"])]
+    Whoami,
+
+    /// Display formatted current date and time
+    #[command(name = "time", alias = "tim", aliases = ["date", "dat"])]
+    Time {
+        /// Optional date format
+        format: Option<String>,
+    },
+
+    /// Display recent shell command history
+    #[command(name = "history", alias = "his")]
+    History {
+        /// Number of recent commands to display
+        limit: Option<usize>,
+    },
+
+    /// Locate executable binary in PATH
+    #[command(name = "which", alias = "whc", alias = "loc")]
+    Which {
+        /// Binary name to locate
+        binary: Option<String>,
+    },
+
+    /// Inspect or search environment variables
+    #[command(name = "environment", alias = "env")]
+    Env {
+        /// Variable name or filter
+        key: Option<String>,
     },
 
     /// Smart project management, workspace scanner, and IDE selector
@@ -82,7 +242,7 @@ enum Commands {
     },
 
     /// Run development server for the current active project
-    #[command(name = "dev")]
+    #[command(name = "develop", alias = "dev")]
     Dev,
 
     /// Build or compile the current active project
@@ -94,14 +254,14 @@ enum Commands {
     Init,
 
     /// Display complete command reference and usage tutorial
-    #[command(name = "help", alias = "guide", alias = "doc")]
+    #[command(name = "help", alias = "doc", alias = "guide")]
     Help {
         /// Optional command name or alias to inspect
         command: Option<String>,
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum MakeTargetType {
     Folder,
     File,
@@ -119,7 +279,13 @@ fn run_app() -> Result<()> {
     let theme = custom_theme();
 
     match cli.command {
-        Commands::Make { target_type, name } => handle_make(&theme, target_type, name),
+        Commands::Make {
+            item,
+            name,
+            file,
+            folder,
+        } => handle_make(&theme, item, name, file, folder),
+        Commands::Remove { target } => handle_del(&theme, target),
         Commands::Open { target } => handle_open(&theme, target),
         Commands::Copy {
             source,
@@ -129,9 +295,26 @@ fn run_app() -> Result<()> {
             source,
             destination,
         } => handle_move(&theme, source, destination),
-        Commands::Del { target } => handle_del(&theme, target),
         Commands::Clear => clear_terminal(),
         Commands::Go { target } => handle_go(&theme, target.as_deref()),
+        Commands::List { path, all, long } => commands::handle_list(&theme, path, all, long),
+        Commands::Path { interactive } => commands::handle_path(&theme, interactive),
+        Commands::Read { path } => commands::handle_read(&theme, path),
+        Commands::Find { pattern, path } => commands::handle_find(&theme, pattern, path),
+        Commands::Process { filter, snapshot } => commands::handle_process(filter.as_deref(), snapshot),
+        Commands::Kill { target, force } => commands::handle_kill(&theme, target.as_deref(), force),
+        Commands::Port { port } => commands::handle_port(&theme, port.as_deref()),
+        Commands::Fetch { url, output, headers } => commands::handle_fetch(&theme, url.as_deref(), output, headers),
+        Commands::Disk { path, usage } => commands::handle_disk(&theme, path, usage),
+        Commands::Pack { archive, target } => commands::handle_pack(&theme, archive, target),
+        Commands::Unpack { archive, destination } => commands::handle_unpack(&theme, archive, destination),
+        Commands::Permit { mode, path } => commands::handle_permit(&theme, mode.as_deref(), path),
+        Commands::Ping { host } => commands::handle_ping(&theme, host.as_deref()),
+        Commands::Whoami => commands::handle_whoami(),
+        Commands::Time { format } => commands::handle_time(format.as_deref()),
+        Commands::History { limit } => commands::handle_history(limit),
+        Commands::Which { binary } => commands::handle_which(&theme, binary.as_deref()),
+        Commands::Env { key } => commands::handle_env(key.as_deref()),
         Commands::Project { target } => handle_project(&theme, target.as_deref()),
         Commands::Dev => handle_dev(),
         Commands::Build => handle_build(),
@@ -143,12 +326,13 @@ fn run_app() -> Result<()> {
 /// Handles folder or file creation in both direct and interactive modes.
 fn handle_make(
     theme: &ColorfulTheme,
-    target_type: Option<MakeTargetType>,
+    item: Option<String>,
     name: Option<PathBuf>,
+    force_file: bool,
+    force_folder: bool,
 ) -> Result<()> {
-    let resolved_type = match target_type {
-        Some(t) => t,
-        None => {
+    let (target_type, target_path) = match (item, name) {
+        (None, None) => {
             let options = ["Folder", "File", "Cancel"];
             let selection = Select::with_theme(theme)
                 .with_prompt("Select item type to create")
@@ -156,21 +340,16 @@ fn handle_make(
                 .default(0)
                 .interact()?;
 
-            match selection {
+            let selected_type = match selection {
                 0 => MakeTargetType::Folder,
                 1 => MakeTargetType::File,
                 _ => {
                     println!("Cancelled.");
                     return Ok(());
                 }
-            }
-        }
-    };
+            };
 
-    let resolved_name = match name {
-        Some(path) => path,
-        None => {
-            let prompt_text = match resolved_type {
+            let prompt_text = match selected_type {
                 MakeTargetType::Folder => "Folder path (leave blank to cancel)",
                 MakeTargetType::File => "File path (leave blank to cancel)",
             };
@@ -183,13 +362,89 @@ fn handle_make(
                 println!("Cancelled.");
                 return Ok(());
             }
-            PathBuf::from(trimmed)
+            (selected_type, PathBuf::from(trimmed))
         }
+        (Some(first), Some(second)) => {
+            let first_lower = first.to_lowercase();
+            let selected_type = if first_lower == "folder" || first_lower == "dir" || first_lower == "directory" {
+                MakeTargetType::Folder
+            } else if first_lower == "file" {
+                MakeTargetType::File
+            } else if force_folder {
+                MakeTargetType::Folder
+            } else if force_file {
+                MakeTargetType::File
+            } else {
+                MakeTargetType::Folder
+            };
+            (selected_type, second)
+        }
+        (Some(first), None) => {
+            let first_lower = first.to_lowercase();
+            if first_lower == "folder" || first_lower == "dir" || first_lower == "directory" {
+                let input: String = Input::with_theme(theme)
+                    .with_prompt("Folder path (leave blank to cancel)")
+                    .allow_empty(true)
+                    .interact_text()?;
+                let trimmed = input.trim();
+                if trimmed.is_empty() {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+                (MakeTargetType::Folder, PathBuf::from(trimmed))
+            } else if first_lower == "file" {
+                let input: String = Input::with_theme(theme)
+                    .with_prompt("File path (leave blank to cancel)")
+                    .allow_empty(true)
+                    .interact_text()?;
+                let trimmed = input.trim();
+                if trimmed.is_empty() {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+                (MakeTargetType::File, PathBuf::from(trimmed))
+            } else {
+                let path = PathBuf::from(&first);
+                let selected_type = if force_folder {
+                    MakeTargetType::Folder
+                } else if force_file {
+                    MakeTargetType::File
+                } else if first.ends_with('/') || first.ends_with('\\') {
+                    MakeTargetType::Folder
+                } else {
+                    let invoked_as = std::env::args().nth(1).unwrap_or_default();
+                    if invoked_as == "touch" {
+                        MakeTargetType::File
+                    } else if invoked_as == "mkdir" {
+                        MakeTargetType::Folder
+                    } else if path.extension().is_some() {
+                        MakeTargetType::File
+                    } else {
+                        let options = ["Folder", "File", "Cancel"];
+                        let selection = Select::with_theme(theme)
+                            .with_prompt(format!("Create '{}' as", first))
+                            .items(&options)
+                            .default(0)
+                            .interact()?;
+                        match selection {
+                            0 => MakeTargetType::Folder,
+                            1 => MakeTargetType::File,
+                            _ => {
+                                println!("Cancelled.");
+                                return Ok(());
+                            }
+                        }
+                    }
+                };
+                (selected_type, path)
+            }
+        }
+        (None, Some(second)) => (MakeTargetType::Folder, second),
     };
 
-    match resolved_type {
-        MakeTargetType::Folder => make_directory(&resolved_name),
-        MakeTargetType::File => create_empty_file(&resolved_name),
+    match target_type {
+        MakeTargetType::Folder => make_directory(&target_path),
+        MakeTargetType::File => create_empty_file(&target_path),
     }
 }
 
@@ -358,10 +613,13 @@ fn make_directory(path: &Path) -> Result<()> {
 fn create_empty_file(path: &Path) -> Result<()> {
     ensure_parent_exists(path)?;
 
-    fs::File::create_new(path)
-        .with_context(|| format!("failed to create file '{}' (file may already exist)", path.display()))?;
-
-    println!("Created file: {}", path.display());
+    if path.exists() {
+        println!("File already exists: {}", path.display());
+    } else {
+        fs::File::create(path)
+            .with_context(|| format!("failed to create file '{}'", path.display()))?;
+        println!("Created file: {}", path.display());
+    }
     Ok(())
 }
 
@@ -752,7 +1010,7 @@ fn scan_for_query(
 fn handle_init() -> Result<()> {
     println!(
         r#"run() {{
-    if [ "$1" = "go" ] || [ "$1" = "jmp" ] || [ "$1" = "nav" ] || [ "$1" = "project" ] || [ "$1" = "prj" ]; then
+    if [ "$1" = "go" ] || [ "$1" = "jmp" ] || [ "$1" = "nav" ] || [ "$1" = "cd" ] || [ "$1" = "project" ] || [ "$1" = "prj" ]; then
         local target
         target="$(RUN_SHELL_RESOLVE=1 command run "$@")" || return $?
         if [ -n "$target" ] && [ -d "$target" ]; then
@@ -1273,36 +1531,54 @@ fn print_main_help() {
     println!("  run <command> [arguments]");
     println!("  run <alias>   [arguments]");
     println!();
-    println!("{}", electric_blue("COMMANDS:").bold());
-    print_cmd_summary("make", "mak", "Create directory or empty file");
-    print_cmd_summary("open", "opn", "Launch macOS application (open -a)");
-    print_cmd_summary("copy", "cpy", "Copy file or directory tree recursively");
-    print_cmd_summary("move", "mov", "Move or rename file or directory");
-    print_cmd_summary("del", "dlt", "Safely delete file or directory tree");
-    print_cmd_summary("clear", "clr", "Clear terminal screen");
-    print_cmd_summary("go", "jmp, nav", "Smart directory navigation");
+    println!("{}", electric_blue("WORKSPACE & DEV:").bold());
     print_cmd_summary("project", "prj", "Scan projects & open in IDE or terminal");
-    print_cmd_summary("dev", "dev", "Run active project development server");
+    print_cmd_summary("dev", "dev", "Run active project dev server");
     print_cmd_summary("build", "bld", "Build or compile active project");
+    println!();
+    println!("{}", electric_blue("FILESYSTEM & NAVIGATION:").bold());
+    print_cmd_summary("go", "jmp (cd)", "Smart directory navigation & hub jump");
+    print_cmd_summary("path", "pth (pwd)", "Print or copy current working directory");
+    print_cmd_summary("list", "lst (ls)", "List directory contents with formatted sizes");
+    print_cmd_summary("make", "mak (touch, mkdir)", "Create folders or empty files");
+    print_cmd_summary("remove", "rmv (rm, del)", "Safely delete files or directories");
+    print_cmd_summary("copy", "cpy (cp)", "Copy files or directories recursively");
+    print_cmd_summary("move", "mov (mv)", "Move or rename files and directories");
+    print_cmd_summary("read", "red (cat)", "Inspect file contents directly");
+    print_cmd_summary("find", "fnd (grep)", "Search pattern or text in files");
+    print_cmd_summary("permit", "prm (chmod)", "Change permissions with presets");
+    println!();
+    println!("{}", electric_blue("SYSTEM & PROCESS:").bold());
+    print_cmd_summary("process", "prc (ps, top)", "Inspect active processes or resource snapshot");
+    print_cmd_summary("kill", "kil (stop)", "Terminate process with search & confirm");
+    print_cmd_summary("disk", "dsk (df, du)", "Inspect disk space or directory usage");
+    print_cmd_summary("whoami", "who", "Display user identity and system details");
+    print_cmd_summary("time", "tim (date)", "Display current date and time");
+    print_cmd_summary("history", "his", "Display recent shell command history");
+    print_cmd_summary("which", "whc", "Locate binary executable in PATH");
+    print_cmd_summary("env", "env", "Inspect or search environment variables");
+    println!();
+    println!("{}", electric_blue("NETWORKING & ARCHIVE:").bold());
+    print_cmd_summary("port", "prt (lsof)", "Check active listening ports & sockets");
+    print_cmd_summary("fetch", "fch (curl, wget)", "Fetch HTTP response or download file");
+    print_cmd_summary("ping", "png", "Test network host latency");
+    print_cmd_summary("pack", "pck (tar, zip)", "Create compressed archive (.tar.gz, .zip)");
+    print_cmd_summary("unpack", "upk (unzip)", "Extract compressed archive");
+    println!();
+    println!("{}", electric_blue("UTILITY:").bold());
+    print_cmd_summary("open", "opn", "Launch macOS applications (open -a)");
+    print_cmd_summary("clear", "clr", "Clear terminal screen");
     print_cmd_summary("init", "ini", "Generate shell integration wrapper");
-    print_cmd_summary("help", "guide, doc", "Display reference or detailed guide");
+    print_cmd_summary("help", "doc (guide)", "Display reference or detailed guide");
     println!();
     println!("{}", electric_blue("CANCELLATION:").bold());
-    println!("  - Selection menus always provide 'Cancel' as the last option.");
-    println!("  - Text input prompts cancel immediately when left blank.");
-    println!("  - Deletion confirmations default to 'N' (Cancel).");
-    println!();
-    println!("{}", electric_blue("EXAMPLES:").bold());
-    println!("  run mak folder src/components");
-    println!("  run opn Safari");
-    println!("  run jmp root");
-    println!("  run prj .");
-    println!("  run dev");
-    println!("  run bld");
+    println!("  - Menus: Select 'Cancel' (last option) to abort.");
+    println!("  - Prompts: Press Enter on blank input to abort.");
+    println!("  - Deletion: Confirmation defaults to 'N' (Cancel).");
     println!();
     println!(
         "{}",
-        electric_blue("Run 'run help <command>' (e.g. 'run help project') for detailed guide.").dimmed()
+        electric_blue("Run 'run help <command>' (e.g. 'run help fetch') for detailed guide.").dimmed()
     );
     println!();
 }
@@ -1313,7 +1589,7 @@ fn print_cmd_summary(cmd: &str, alias: &str, desc: &str) {
     } else {
         format!("{cmd}, {alias}")
     };
-    println!("  {: <20} {}", name_col.bold(), desc);
+    println!("  {: <24} {}", name_col.bold(), desc);
 }
 
 fn print_command_detail(cmd: &str) {
@@ -1321,9 +1597,9 @@ fn print_command_detail(cmd: &str) {
     println!();
 
     match cmd_lower.as_str() {
-        "make" | "mak" => {
-            println!("{} make (alias: mak)", electric_blue("COMMAND:").bold());
-            println!("Create directories or empty files directly or interactively.\n");
+        "make" | "mak" | "mkdir" | "touch" => {
+            println!("{} make (alias: mak, mkdir, touch)", electric_blue("COMMAND:").bold());
+            println!("Unified creation for folders and files directly or interactively.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run make folder <path>    Create folder and required parents");
             println!("  run make file <path>      Create empty file with parent directories");
@@ -1332,18 +1608,17 @@ fn print_command_detail(cmd: &str) {
             println!("  run mak folder src/routes");
             println!("  run mak file src/routes/index.ts");
         }
-        "open" | "opn" => {
-            println!("{} open (alias: opn)", electric_blue("COMMAND:").bold());
-            println!("Launch macOS desktop applications via native open -a.\n");
+        "remove" | "rmv" | "del" | "dlt" | "rm" | "delete" => {
+            println!("{} remove (alias: rmv, del, rm)", electric_blue("COMMAND:").bold());
+            println!("Safely remove files or directories with confirmation prompt.\n");
             println!("{}", electric_blue("USAGE:").bold());
-            println!("  run open <app_name>       Open target application");
-            println!("  run opn                   Prompt for application name interactively\n");
-            println!("{}", electric_blue("EXAMPLES:").bold());
-            println!("  run opn Safari");
-            println!("  run opn \"Visual Studio Code\"");
+            println!("  run remove <path>         Prompt confirmation [y/N] then delete");
+            println!("  run rmv                   Interactive target prompt & confirmation\n");
+            println!("{}", electric_blue("SAFETY:").bold());
+            println!("  Defaults to 'No' (false). Pressing Enter cancels deletion immediately.");
         }
-        "copy" | "cpy" => {
-            println!("{} copy (alias: cpy)", electric_blue("COMMAND:").bold());
+        "copy" | "cpy" | "cp" => {
+            println!("{} copy (alias: cpy, cp)", electric_blue("COMMAND:").bold());
             println!("Copy single files or recursively copy directory trees.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run copy <src> <dst>      Copy source to destination");
@@ -1352,8 +1627,8 @@ fn print_command_detail(cmd: &str) {
             println!("  run cpy document.pdf backup.pdf");
             println!("  run cpy src/ backup_src/");
         }
-        "move" | "mov" => {
-            println!("{} move (alias: mov)", electric_blue("COMMAND:").bold());
+        "move" | "mov" | "mv" => {
+            println!("{} move (alias: mov, mv)", electric_blue("COMMAND:").bold());
             println!("Move or rename files and directories.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run move <src> <dst>      Move or rename source to destination");
@@ -1362,14 +1637,135 @@ fn print_command_detail(cmd: &str) {
             println!("  run mov draft.txt final.txt");
             println!("  run mov assets/ public/assets/");
         }
-        "del" | "dlt" | "delete" => {
-            println!("{} del (alias: dlt)", electric_blue("COMMAND:").bold());
-            println!("Safely delete files or directories with confirmation prompt.\n");
+        "path" | "pth" | "pwd" => {
+            println!("{} path (alias: pth, pwd)", electric_blue("COMMAND:").bold());
+            println!("Print or copy current working directory path.\n");
             println!("{}", electric_blue("USAGE:").bold());
-            println!("  run del <path>            Prompt confirmation [y/N] then delete");
-            println!("  run dlt                   Prompt for target path and confirmation\n");
-            println!("{}", electric_blue("SAFETY:").bold());
-            println!("  Defaults to 'No' (false). Pressing Enter cancels deletion immediately.");
+            println!("  run path                  Print current directory");
+            println!("  run pth -i                Interactive mode with copy to clipboard");
+        }
+        "list" | "lst" | "ls" => {
+            println!("{} list (alias: lst, ls)", electric_blue("COMMAND:").bold());
+            println!("List directory contents with formatted sizes and colored directories.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run list                  List current directory");
+            println!("  run lst -a                Include hidden entries");
+            println!("  run lst -l                Long listing format");
+        }
+        "read" | "red" | "cat" => {
+            println!("{} read (alias: red, cat)", electric_blue("COMMAND:").bold());
+            println!("Display file contents with text decoding.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run read <file>           Display file contents");
+            println!("  run red                   Interactive file picker in current directory");
+        }
+        "find" | "fnd" | "grep" | "search" => {
+            println!("{} find (alias: fnd, grep)", electric_blue("COMMAND:").bold());
+            println!("Search pattern or text across files recursively.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run find <pattern> [path] Search pattern in path (default current dir)");
+            println!("  run fnd                   Prompt for pattern interactively");
+        }
+        "process" | "prc" | "ps" | "top" => {
+            println!("{} process (alias: prc, ps, top)", electric_blue("COMMAND:").bold());
+            println!("Inspect active processes or display resource usage snapshot.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run process               List active processes");
+            println!("  run prc <filter>          Filter processes by name or user");
+            println!("  run prc -s                Resource usage snapshot (CPU & Memory)");
+        }
+        "kill" | "kil" | "stop" | "stp" => {
+            println!("{} kill (alias: kil, stop)", electric_blue("COMMAND:").bold());
+            println!("Terminate a running process by PID or name with safe confirmation.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run kill <pid_or_name>    Prompt confirmation and terminate");
+            println!("  run kil                   Interactive process selector & confirm");
+        }
+        "port" | "prt" | "lsof" => {
+            println!("{} port (alias: prt, lsof)", electric_blue("COMMAND:").bold());
+            println!("Inspect active network ports and listening sockets.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run port <port>           Check process on port (e.g. 3000)");
+            println!("  run prt                   Prompt for port or list all listening TCP");
+        }
+        "fetch" | "fch" | "get" | "curl" | "wget" => {
+            println!("{} fetch (alias: fch, get, curl, wget)", electric_blue("COMMAND:").bold());
+            println!("Unified network client: fetch HTTP responses or download files locally.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run fetch <url>           Fetch HTTP response headers and body");
+            println!("  run fch <url> -o <file>   Download URL to local file with progress bar");
+            println!("  run fch                   Prompt for URL interactively");
+        }
+        "disk" | "dsk" | "df" | "du" => {
+            println!("{} disk (alias: dsk, df, du)", electric_blue("COMMAND:").bold());
+            println!("Inspect disk free space on mounted volumes or directory usage.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run disk                  Display mounted volumes free space");
+            println!("  run dsk <path>            Calculate directory disk usage");
+            println!("  run dsk -u                Interactive folder usage selector");
+        }
+        "pack" | "pck" | "tar" | "zip" => {
+            println!("{} pack (alias: pck, tar, zip)", electric_blue("COMMAND:").bold());
+            println!("Create compressed archives (.tar.gz or .zip).\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run pack <archive> <target>   Create archive from target");
+            println!("  run pck                       Interactive prompt for archive and target");
+        }
+        "unpack" | "upk" | "unzip" | "untar" => {
+            println!("{} unpack (alias: upk, unzip)", electric_blue("COMMAND:").bold());
+            println!("Extract compressed archives (.zip or .tar.gz).\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run unpack <archive> [dst]    Extract archive to destination");
+            println!("  run upk                       Interactive archive picker in current dir");
+        }
+        "permit" | "prm" | "chmod" => {
+            println!("{} permit (alias: prm, chmod)", electric_blue("COMMAND:").bold());
+            println!("Change file or folder permissions with presets.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run permit <mode> <path>  Update permissions (e.g. 755, 644, +x)");
+            println!("  run prm                   Interactive file & preset selector");
+        }
+        "ping" | "png" => {
+            println!("{} ping (alias: png)", electric_blue("COMMAND:").bold());
+            println!("Test network host latency with 4 packets.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run ping <host>           Ping target host");
+            println!("  run png                   Interactive host picker");
+        }
+        "whoami" | "who" => {
+            println!("{} whoami (alias: who)", electric_blue("COMMAND:").bold());
+            println!("Print user identity, hostname, UID, GID, and home directory.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run whoami");
+            println!("  run who");
+        }
+        "time" | "tim" | "date" => {
+            println!("{} time (alias: tim, date)", electric_blue("COMMAND:").bold());
+            println!("Display formatted current date and time.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run time");
+            println!("  run tim");
+        }
+        "history" | "his" => {
+            println!("{} history (alias: his)", electric_blue("COMMAND:").bold());
+            println!("Display recent shell command history.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run history [limit]");
+            println!("  run his");
+        }
+        "which" | "whc" => {
+            println!("{} which (alias: whc)", electric_blue("COMMAND:").bold());
+            println!("Locate binary executable in system PATH.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run which <binary>");
+            println!("  run whc");
+        }
+        "env" => {
+            println!("{} env", electric_blue("COMMAND:").bold());
+            println!("Inspect or search environment variables.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run env                   List all environment variables");
+            println!("  run env <query>           Search variables matching query");
         }
         "clear" | "clr" => {
             println!("{} clear (alias: clr)", electric_blue("COMMAND:").bold());
@@ -1378,8 +1774,8 @@ fn print_command_detail(cmd: &str) {
             println!("  run clear");
             println!("  run clr");
         }
-        "go" | "jmp" | "nav" => {
-            println!("{} go (alias: jmp, nav)", electric_blue("COMMAND:").bold());
+        "go" | "jmp" | "nav" | "cd" => {
+            println!("{} go (alias: jmp, nav, cd)", electric_blue("COMMAND:").bold());
             println!("Smart directory navigation replacing manual cd commands.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run go root               Jump to home directory (~)");
@@ -1428,6 +1824,13 @@ fn print_command_detail(cmd: &str) {
             println!("  run build");
             println!("  run bld");
         }
+        "open" | "opn" => {
+            println!("{} open (alias: opn)", electric_blue("COMMAND:").bold());
+            println!("Launch macOS desktop applications via native open -a.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run open <app_name>       Open target application");
+            println!("  run opn                   Prompt for application name interactively");
+        }
         "init" | "ini" => {
             println!("{} init (alias: ini)", electric_blue("COMMAND:").bold());
             println!("Generate shell integration script for automatic cd in active shell.\n");
@@ -1465,18 +1868,31 @@ mod tests {
             Cli::try_parse_from(["run", "mak", "folder", "my_folder"]),
             Ok(Cli {
                 command: Commands::Make {
-                    target_type: Some(MakeTargetType::Folder),
+                    item: Some(ref item),
                     name: Some(name),
+                    ..
                 }
-            }) if name == Path::new("my_folder")
+            }) if item == "folder" && name == Path::new("my_folder")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "make", "foo.txt"]),
+            Ok(Cli {
+                command: Commands::Make {
+                    item: Some(ref item),
+                    name: None,
+                    ..
+                }
+            }) if item == "foo.txt"
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "make"]),
             Ok(Cli {
                 command: Commands::Make {
-                    target_type: None,
+                    item: None,
                     name: None,
+                    ..
                 }
             })
         ));
@@ -1498,7 +1914,7 @@ mod tests {
 
         assert!(matches!(
             Cli::try_parse_from(["run", "dlt", "temp.txt"]),
-            Ok(Cli { command: Commands::Del { .. } })
+            Ok(Cli { command: Commands::Remove { .. } })
         ));
 
         assert!(matches!(
@@ -1559,6 +1975,176 @@ mod tests {
         assert!(matches!(
             Cli::try_parse_from(["run", "bld"]),
             Ok(Cli { command: Commands::Build })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "path"]),
+            Ok(Cli { command: Commands::Path { interactive: false } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "pth"]),
+            Ok(Cli { command: Commands::Path { interactive: false } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "pwd"]),
+            Ok(Cli { command: Commands::Path { interactive: false } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "list", "-a", "-l"]),
+            Ok(Cli { command: Commands::List { all: true, long: true, .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "lst"]),
+            Ok(Cli { command: Commands::List { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "ls"]),
+            Ok(Cli { command: Commands::List { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "cd", "root"]),
+            Ok(Cli { command: Commands::Go { target: Some(ref t) } }) if t == "root"
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "mkdir", "my_dir"]),
+            Ok(Cli { command: Commands::Make { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "touch", "my_file"]),
+            Ok(Cli { command: Commands::Make { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "cp", "a", "b"]),
+            Ok(Cli { command: Commands::Copy { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "mv", "a", "b"]),
+            Ok(Cli { command: Commands::Move { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "remove", "dir"]),
+            Ok(Cli { command: Commands::Remove { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "rmv", "dir"]),
+            Ok(Cli { command: Commands::Remove { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "rm", "dir"]),
+            Ok(Cli { command: Commands::Remove { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "read", "file.txt"]),
+            Ok(Cli { command: Commands::Read { path: Some(_) } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "red", "file.txt"]),
+            Ok(Cli { command: Commands::Read { path: Some(_) } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "cat", "file.txt"]),
+            Ok(Cli { command: Commands::Read { path: Some(_) } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "find", "hello"]),
+            Ok(Cli { command: Commands::Find { pattern: Some(ref p), .. } }) if p == "hello"
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "fnd", "hello"]),
+            Ok(Cli { command: Commands::Find { pattern: Some(ref p), .. } }) if p == "hello"
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "grep", "hello"]),
+            Ok(Cli { command: Commands::Find { pattern: Some(ref p), .. } }) if p == "hello"
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "process"]),
+            Ok(Cli { command: Commands::Process { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "prc"]),
+            Ok(Cli { command: Commands::Process { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "kill", "1234"]),
+            Ok(Cli { command: Commands::Kill { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "kil", "1234"]),
+            Ok(Cli { command: Commands::Kill { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "port", "3000"]),
+            Ok(Cli { command: Commands::Port { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "prt", "3000"]),
+            Ok(Cli { command: Commands::Port { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "fetch", "https://example.com"]),
+            Ok(Cli { command: Commands::Fetch { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "fch", "https://example.com"]),
+            Ok(Cli { command: Commands::Fetch { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "disk"]),
+            Ok(Cli { command: Commands::Disk { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "dsk"]),
+            Ok(Cli { command: Commands::Disk { .. } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "whoami"]),
+            Ok(Cli { command: Commands::Whoami })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "who"]),
+            Ok(Cli { command: Commands::Whoami })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "which", "node"]),
+            Ok(Cli { command: Commands::Which { binary: Some(ref b) } }) if b == "node"
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "whc", "node"]),
+            Ok(Cli { command: Commands::Which { binary: Some(ref b) } }) if b == "node"
         ));
     }
 }
