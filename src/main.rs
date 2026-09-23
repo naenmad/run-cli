@@ -74,6 +74,21 @@ enum Commands {
         target: Option<String>,
     },
 
+    /// Smart project management, workspace scanner, and IDE selector
+    #[command(name = "project", alias = "prj")]
+    Project {
+        /// Target project path or keyword ('.' for current directory)
+        target: Option<String>,
+    },
+
+    /// Run development server for the current active project
+    #[command(name = "dev")]
+    Dev,
+
+    /// Build or compile the current active project
+    #[command(name = "build", alias = "bld")]
+    Build,
+
     /// Generate shell integration script for automatic directory switching
     #[command(name = "init", alias = "ini")]
     Init,
@@ -117,6 +132,9 @@ fn run_app() -> Result<()> {
         Commands::Del { target } => handle_del(&theme, target),
         Commands::Clear => clear_terminal(),
         Commands::Go { target } => handle_go(&theme, target.as_deref()),
+        Commands::Project { target } => handle_project(&theme, target.as_deref()),
+        Commands::Dev => handle_dev(),
+        Commands::Build => handle_build(),
         Commands::Init => handle_init(),
         Commands::Help { command } => handle_help(command.as_deref()),
     }
@@ -734,7 +752,7 @@ fn scan_for_query(
 fn handle_init() -> Result<()> {
     println!(
         r#"run() {{
-    if [ "$1" = "go" ] || [ "$1" = "jmp" ] || [ "$1" = "nav" ]; then
+    if [ "$1" = "go" ] || [ "$1" = "jmp" ] || [ "$1" = "nav" ] || [ "$1" = "project" ] || [ "$1" = "prj" ]; then
         local target
         target="$(RUN_SHELL_RESOLVE=1 command run "$@")" || return $?
         if [ -n "$target" ] && [ -d "$target" ]; then
@@ -745,6 +763,471 @@ fn handle_init() -> Result<()> {
     fi
 }}"#
     );
+    Ok(())
+}
+
+/// Handles smart project scanning, contextual project selection, and interactive IDE launching.
+fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
+    let current_dir = std::env::current_dir().context("failed to read current working directory")?;
+    let home_dir = std::env::var("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/"));
+
+    let target_path = match target {
+        Some(".") => current_dir,
+        Some(t) => {
+            let candidate_path = PathBuf::from(t);
+            if candidate_path.exists() {
+                if candidate_path.is_absolute() {
+                    candidate_path
+                } else {
+                    current_dir.join(candidate_path)
+                }
+            } else {
+                let scanned = scan_projects(&home_dir, &current_dir);
+                let q_lower = t.to_lowercase();
+                let matches: Vec<PathBuf> = scanned
+                    .into_iter()
+                    .filter(|p| {
+                        let name = p
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("")
+                            .to_lowercase();
+                        name.contains(&q_lower)
+                            || p.to_string_lossy().to_lowercase().contains(&q_lower)
+                    })
+                    .collect();
+
+                if matches.is_empty() {
+                    bail!("no project matching '{t}' found");
+                } else if matches.len() == 1 {
+                    matches.into_iter().next().unwrap()
+                } else {
+                    let term = dialoguer::console::Term::stderr();
+                    let home_str = home_dir.to_string_lossy();
+                    let mut display_items: Vec<String> = matches
+                        .iter()
+                        .take(20)
+                        .map(|p| {
+                            let p_str = p.to_string_lossy();
+                            if p_str.starts_with(home_str.as_ref()) {
+                                format!("~{}", &p_str[home_str.len()..])
+                            } else {
+                                p_str.to_string()
+                            }
+                        })
+                        .collect();
+                    display_items.push("Cancel".to_string());
+
+                    let prompt = format!("Multiple projects match '{t}'. Select target:");
+                    let selection = Select::with_theme(theme)
+                        .with_prompt(prompt)
+                        .items(&display_items)
+                        .default(0)
+                        .interact_on(&term)?;
+
+                    if selection == display_items.len() - 1 {
+                        println!("Cancelled.");
+                        return Ok(());
+                    }
+
+                    matches[selection].clone()
+                }
+            }
+        }
+        None => {
+            let term = dialoguer::console::Term::stderr();
+            let scanned = scan_projects(&home_dir, &current_dir);
+            if scanned.is_empty() {
+                bail!("no projects found in common development hubs");
+            }
+
+            let home_str = home_dir.to_string_lossy();
+            let mut display_items: Vec<String> = scanned
+                .iter()
+                .take(30)
+                .map(|p| {
+                    let p_str = p.to_string_lossy();
+                    if p_str.starts_with(home_str.as_ref()) {
+                        format!("~{}", &p_str[home_str.len()..])
+                    } else {
+                        p_str.to_string()
+                    }
+                })
+                .collect();
+            display_items.push("Cancel".to_string());
+
+            let selection = Select::with_theme(theme)
+                .with_prompt("Select project")
+                .items(&display_items)
+                .default(0)
+                .interact_on(&term)?;
+
+            if selection == display_items.len() - 1 {
+                println!("Cancelled.");
+                return Ok(());
+            }
+
+            scanned[selection].clone()
+        }
+    };
+
+    let canonical = target_path.canonicalize().unwrap_or(target_path);
+
+    let ide_options = [
+        "Visual Studio Code (code)",
+        "Cursor (cursor)",
+        "Xcode (xcode)",
+        "Hanya Pindah Terminal / Saja",
+        "Cancel",
+    ];
+
+    let term = dialoguer::console::Term::stderr();
+    let project_name = canonical
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("project");
+    let prompt = format!("Open '{project_name}' with:");
+
+    let ide_selection = Select::with_theme(theme)
+        .with_prompt(prompt)
+        .items(&ide_options)
+        .default(0)
+        .interact_on(&term)?;
+
+    let is_shell_resolve = std::env::var("RUN_SHELL_RESOLVE")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+
+    match ide_selection {
+        0 => open_in_vscode(&canonical, is_shell_resolve)?,
+        1 => open_in_cursor(&canonical, is_shell_resolve)?,
+        2 => open_in_xcode(&canonical, is_shell_resolve)?,
+        3 => {
+            if is_shell_resolve {
+                println!("{}", canonical.display());
+            } else {
+                println!(
+                    "{}",
+                    format!("Target directory: {}", canonical.display()).green()
+                );
+                eprintln!(
+                    "Notice: Run 'source ~/.zshrc' in this terminal tab to activate in-place directory switching."
+                );
+            }
+        }
+        _ => {
+            println!("Cancelled.");
+        }
+    }
+
+    Ok(())
+}
+
+/// Opens project directory in Visual Studio Code.
+fn open_in_vscode(path: &Path, is_shell_resolve: bool) -> Result<()> {
+    let status = Command::new("code").arg(path).status();
+    let success = match status {
+        Ok(s) => s.success(),
+        Err(_) => false,
+    };
+
+    if !success {
+        let fallback = Command::new("open")
+            .arg("-a")
+            .arg("Visual Studio Code")
+            .arg(path)
+            .status()
+            .with_context(|| "failed to launch Visual Studio Code via open -a")?;
+        if !fallback.success() {
+            bail!("failed to launch Visual Studio Code");
+        }
+    }
+
+    let msg = format!("Opened project in Visual Studio Code: {}", path.display());
+    if is_shell_resolve {
+        eprintln!("{}", msg.green());
+    } else {
+        println!("{}", msg.green());
+    }
+    Ok(())
+}
+
+/// Opens project directory in Cursor.
+fn open_in_cursor(path: &Path, is_shell_resolve: bool) -> Result<()> {
+    let status = Command::new("cursor").arg(path).status();
+    let success = match status {
+        Ok(s) => s.success(),
+        Err(_) => false,
+    };
+
+    if !success {
+        let fallback = Command::new("open")
+            .arg("-a")
+            .arg("Cursor")
+            .arg(path)
+            .status()
+            .with_context(|| "failed to launch Cursor via open -a")?;
+        if !fallback.success() {
+            bail!("failed to launch Cursor (ensure Cursor is installed in /Applications)");
+        }
+    }
+
+    let msg = format!("Opened project in Cursor: {}", path.display());
+    if is_shell_resolve {
+        eprintln!("{}", msg.green());
+    } else {
+        println!("{}", msg.green());
+    }
+    Ok(())
+}
+
+/// Opens project directory in Xcode (opens .xcworkspace or .xcodeproj if present).
+fn open_in_xcode(path: &Path, is_shell_resolve: bool) -> Result<()> {
+    let mut xcode_file = None;
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                if ext == "xcworkspace" {
+                    xcode_file = Some(p);
+                    break;
+                } else if ext == "xcodeproj" && xcode_file.is_none() {
+                    xcode_file = Some(p);
+                }
+            }
+        }
+    }
+
+    let status = if let Some(target) = xcode_file {
+        Command::new("open").arg(target).status()
+    } else {
+        Command::new("open").arg("-a").arg("Xcode").arg(path).status()
+    }
+    .with_context(|| "failed to launch Xcode")?;
+
+    if !status.success() {
+        bail!("failed to launch Xcode");
+    }
+
+    let msg = format!("Opened project in Xcode: {}", path.display());
+    if is_shell_resolve {
+        eprintln!("{}", msg.green());
+    } else {
+        println!("{}", msg.green());
+    }
+    Ok(())
+}
+
+/// Scans standard development directories for project roots.
+fn scan_projects(home_dir: &Path, current_dir: &Path) -> Vec<PathBuf> {
+    let mut projects = Vec::new();
+    let mut visited = HashSet::new();
+
+    let candidate_hubs = [
+        home_dir.join("Developer"),
+        home_dir.join("Projects"),
+        home_dir.join("Code"),
+        home_dir.join("Documents"),
+        home_dir.join("Desktop"),
+    ];
+
+    let ignored_names = [
+        "Library", ".Trash", ".git", "node_modules", "target", ".cargo", ".rustup",
+        ".gemini", ".vscode", ".npm", ".cache", ".local", "venv", ".venv", "Pods",
+        "DerivedData", ".build", ".next", "dist", "build",
+    ];
+
+    for hub in &candidate_hubs {
+        if hub.is_dir() {
+            scan_dir_for_projects(hub, 3, &ignored_names, &mut visited, &mut projects);
+        }
+    }
+
+    if visited.insert(current_dir.to_path_buf()) && is_project_directory(current_dir) {
+        projects.push(current_dir.to_path_buf());
+    }
+
+    projects.sort_by(|a, b| {
+        a.to_string_lossy()
+            .to_lowercase()
+            .cmp(&b.to_string_lossy().to_lowercase())
+    });
+    projects
+}
+
+fn scan_dir_for_projects(
+    dir: &Path,
+    depth: usize,
+    ignored_names: &[&str],
+    visited: &mut HashSet<PathBuf>,
+    projects: &mut Vec<PathBuf>,
+) {
+    if depth == 0 {
+        return;
+    }
+
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+
+        if name.starts_with('.') || ignored_names.contains(&name) {
+            continue;
+        }
+
+        if visited.insert(path.clone()) {
+            if is_project_directory(&path) {
+                projects.push(path.clone());
+            }
+            scan_dir_for_projects(&path, depth - 1, ignored_names, visited, projects);
+        }
+    }
+}
+
+/// Checks if a directory contains project signature markers.
+fn is_project_directory(path: &Path) -> bool {
+    let markers = [
+        ".git",
+        "Cargo.toml",
+        "package.json",
+        "pubspec.yaml",
+        "go.mod",
+        "pom.xml",
+        "build.gradle",
+        "build.gradle.kts",
+        "Makefile",
+        "pyproject.toml",
+        "requirements.txt",
+        "Package.swift",
+        "CMakeLists.txt",
+    ];
+
+    for marker in &markers {
+        if path.join(marker).exists() {
+            return true;
+        }
+    }
+
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            if let Some(ext) = entry.path().extension().and_then(|s| s.to_str())
+                && (ext == "xcodeproj" || ext == "xcworkspace")
+            {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Runs development server for current active project based on detected signature.
+fn handle_dev() -> Result<()> {
+    let current_dir =
+        std::env::current_dir().context("failed to read current working directory")?;
+
+    let (cmd, args, label) = if current_dir.join("Cargo.toml").exists() {
+        ("cargo", vec!["run"], "cargo run")
+    } else if current_dir.join("package.json").exists() {
+        if current_dir.join("pnpm-lock.yaml").exists() {
+            ("pnpm", vec!["run", "dev"], "pnpm run dev")
+        } else if current_dir.join("yarn.lock").exists() {
+            ("yarn", vec!["dev"], "yarn dev")
+        } else if current_dir.join("bun.lockb").exists() || current_dir.join("bun.lock").exists() {
+            ("bun", vec!["run", "dev"], "bun run dev")
+        } else {
+            ("npm", vec!["run", "dev"], "npm run dev")
+        }
+    } else if current_dir.join("pubspec.yaml").exists() {
+        ("flutter", vec!["run"], "flutter run")
+    } else if current_dir.join("go.mod").exists() {
+        ("go", vec!["run", "."], "go run .")
+    } else if current_dir.join("Makefile").exists() {
+        ("make", vec!["dev"], "make dev")
+    } else {
+        bail!(
+            "no recognized project configuration found in current directory (e.g., Cargo.toml, package.json)"
+        );
+    };
+
+    println!(
+        "{}",
+        format!("Starting development server ({label})...")
+            .cyan()
+            .bold()
+    );
+
+    let status = Command::new(cmd)
+        .args(&args)
+        .status()
+        .with_context(|| format!("failed to start development server using '{label}'"))?;
+
+    if !status.success() {
+        let code = status.code().unwrap_or(1);
+        bail!("development server exited with error code {code}");
+    }
+
+    Ok(())
+}
+
+/// Builds or compiles the current active project based on detected signature.
+fn handle_build() -> Result<()> {
+    let current_dir =
+        std::env::current_dir().context("failed to read current working directory")?;
+
+    let (cmd, args, label) = if current_dir.join("Cargo.toml").exists() {
+        ("cargo", vec!["build", "--release"], "cargo build --release")
+    } else if current_dir.join("package.json").exists() {
+        if current_dir.join("pnpm-lock.yaml").exists() {
+            ("pnpm", vec!["run", "build"], "pnpm run build")
+        } else if current_dir.join("yarn.lock").exists() {
+            ("yarn", vec!["build"], "yarn build")
+        } else if current_dir.join("bun.lockb").exists() || current_dir.join("bun.lock").exists() {
+            ("bun", vec!["run", "build"], "bun run build")
+        } else {
+            ("npm", vec!["run", "build"], "npm run build")
+        }
+    } else if current_dir.join("pubspec.yaml").exists() {
+        ("flutter", vec!["build"], "flutter build")
+    } else if current_dir.join("go.mod").exists() {
+        ("go", vec!["build", "."], "go build .")
+    } else if current_dir.join("Makefile").exists() {
+        ("make", vec!["build"], "make build")
+    } else {
+        bail!(
+            "no recognized project configuration found in current directory (e.g., Cargo.toml, package.json)"
+        );
+    };
+
+    println!(
+        "{}",
+        format!("Building project ({label})...").cyan().bold()
+    );
+
+    let status = Command::new(cmd)
+        .args(&args)
+        .status()
+        .with_context(|| format!("failed to execute '{label}'"))?;
+
+    if !status.success() {
+        let code = status.code().unwrap_or(1);
+        bail!("build failed with exit code {code}");
+    }
+
+    println!("{}", "Build completed successfully!".green().bold());
     Ok(())
 }
 
@@ -799,7 +1282,7 @@ mod tests {
                     target_type: Some(MakeTargetType::Folder),
                     name: Some(name),
                 }
-            }) if name == PathBuf::from("my_folder")
+            }) if name == Path::new("my_folder")
         ));
 
         assert!(matches!(
@@ -865,6 +1348,31 @@ mod tests {
         assert!(matches!(
             Cli::try_parse_from(["run", "ini"]),
             Ok(Cli { command: Commands::Init })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "project"]),
+            Ok(Cli { command: Commands::Project { target: None } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "prj", "."]),
+            Ok(Cli { command: Commands::Project { target: Some(ref t) } }) if t == "."
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "dev"]),
+            Ok(Cli { command: Commands::Dev })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "build"]),
+            Ok(Cli { command: Commands::Build })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "bld"]),
+            Ok(Cli { command: Commands::Build })
         ));
     }
 }

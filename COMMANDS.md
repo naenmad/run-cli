@@ -163,8 +163,69 @@ Smart directory navigation that replaces manual `cd` commands.
 
 ---
 
-### 8. `init` (Alias: `ini`)
-Generates the shell integration script for `~/.zshrc` or `~/.bashrc`.
+### 8. `project` (Alias: `prj`)
+Smart project scanner and interactive IDE launcher.
+
+* **Global Scan Mode:**
+  Scans development hubs (`~/Developer`, `~/Projects`, `~/Code`, `~/Documents`, `~/Desktop`) for projects (`.git`, `Cargo.toml`, `package.json`, `pubspec.yaml`, etc.):
+  ```bash
+  run project
+  # or with alias:
+  run prj
+  ```
+  1. Pick a detected project from the interactive list (or select `Cancel`).
+  2. Pick the target editor (`Visual Studio Code`, `Cursor`, `Xcode`, `Hanya Pindah Terminal / Saja`, or `Cancel`).
+
+* **Contextual Current Directory Mode:**
+  Open the current directory directly:
+  ```bash
+  run project .
+  # or with alias:
+  run prj .
+  ```
+
+* **Query Search Mode:**
+  Open or jump to a project by name:
+  ```bash
+  run prj run-cli
+  ```
+
+---
+
+### 9. `dev` (Alias: `dev`)
+Runs the development server for the current active project based on detected file signatures:
+- `Cargo.toml`: `cargo run`
+- `package.json`: `pnpm run dev`, `yarn dev`, `bun run dev`, or `npm run dev`
+- `pubspec.yaml`: `flutter run`
+- `go.mod`: `go run .`
+- `Makefile`: `make dev`
+
+* **Usage:**
+  ```bash
+  run dev
+  ```
+
+---
+
+### 10. `build` (Alias: `bld`)
+Builds and compiles the current active project based on detected file signatures:
+- `Cargo.toml`: `cargo build --release`
+- `package.json`: `npm run build` (or pnpm/yarn/bun)
+- `pubspec.yaml`: `flutter build`
+- `go.mod`: `go build .`
+- `Makefile`: `make build`
+
+* **Usage:**
+  ```bash
+  run build
+  # or with alias:
+  run bld
+  ```
+
+---
+
+### 11. `init` (Alias: `ini`)
+Generates the shell integration script for `~/.zshrc` or `~/.bashrc`. Enables in-place directory switching for `go` and `project`.
 
 * **Usage:**
   ```bash
@@ -173,16 +234,26 @@ Generates the shell integration script for `~/.zshrc` or `~/.bashrc`.
 
 ---
 
-### 9. `help` (Alias: `guide`)
+### 12. `help` (Alias: `guide`)
 Displays this comprehensive reference and tutorial in the terminal.
 
 * **Usage:**
   ```bash
   run help
   # or view specific command documentation:
-  run help make
-  run help go
+  run help project
+  run help dev
+  run help build
   ```
+
+---
+
+## Cancellation Standard
+
+All interactive prompts and menus adhere to a strict cancellation standard:
+- **Interactive selection menus** (`make`, `go`, `project`): The last option is always `Cancel`. Selecting it immediately aborts the action and outputs `Cancelled.`.
+- **Text prompts** (`open`, `copy`, `move`, `del`): Configured with `(leave blank to cancel)`. Pressing Enter without input immediately aborts the action.
+- **Confirmation dialogs** (`del`): Defaults to `[y/N]` (No). Pressing Enter or `n` immediately aborts the action.
 
 ---
 
