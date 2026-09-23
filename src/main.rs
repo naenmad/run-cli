@@ -8,9 +8,10 @@ use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use dialoguer::theme::ColorfulTheme;
-use dialoguer::{Confirm, Input, Select};
+use dialoguer::{Confirm, FuzzySelect, Input, Select};
 
 mod commands;
+mod ui;
 
 #[derive(Parser)]
 #[command(name = "run")]
@@ -316,7 +317,7 @@ enum MakeTargetType {
 }
 
 fn cancel_option() -> String {
-    format!("{}", "Cancel".bright_red().bold())
+    ui::cancel_option()
 }
 
 fn main() {
@@ -749,7 +750,74 @@ fn resolve_command_args_internal(
 }
 
 fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
-    let mut menu_items: Vec<String> = ALL_COMMANDS
+    ui::print_banner();
+    ui::render_breadcrumbs(&["run", "Launcher Dashboard"]);
+
+    let categories = [
+        "🛠️   Developer & Workspace  (project, dev, build, test, clean, sync...)",
+        "📂  Filesystem & Navigation (go, list, make, remove, copy, move...)",
+        "⚙️   System & Monitoring     (process, kill, disk, whoami, time...)",
+        "🌐  Network & Archive       (port, fetch, ping, pack, unpack...)",
+        "🔍  Search All 36 Commands... (search as you type)",
+    ];
+    let cancel_btn = cancel_option();
+    let mut dashboard_options: Vec<String> = categories.iter().map(|s| s.to_string()).collect();
+    dashboard_options.push(cancel_btn);
+
+    ui::print_key_hints();
+    let cat_selection = Select::with_theme(theme)
+        .with_prompt("Select workspace category or search")
+        .items(&dashboard_options)
+        .default(0)
+        .interact()?;
+
+    if cat_selection >= categories.len() {
+        println!("Cancelled.");
+        return Ok(());
+    }
+
+    let target_commands: Vec<CommandInfo> = match cat_selection {
+        0 => ALL_COMMANDS
+            .iter()
+            .copied()
+            .filter(|c| {
+                [
+                    "project", "dev", "build", "test", "clean", "sync", "network", "share", "bench",
+                ]
+                .contains(&c.name)
+            })
+            .collect(),
+        1 => ALL_COMMANDS
+            .iter()
+            .copied()
+            .filter(|c| {
+                [
+                    "go", "path", "list", "make", "remove", "copy", "move", "read", "find",
+                    "permit",
+                ]
+                .contains(&c.name)
+            })
+            .collect(),
+        2 => ALL_COMMANDS
+            .iter()
+            .copied()
+            .filter(|c| {
+                [
+                    "process", "kill", "disk", "whoami", "time", "history", "which", "env",
+                ]
+                .contains(&c.name)
+            })
+            .collect(),
+        3 => ALL_COMMANDS
+            .iter()
+            .copied()
+            .filter(|c| ["port", "fetch", "ping", "pack", "unpack"].contains(&c.name))
+            .collect(),
+        4 => ALL_COMMANDS.to_vec(),
+        _ => return Ok(()),
+    };
+
+    let mut menu_items: Vec<String> = target_commands
         .iter()
         .map(|cmd| {
             let alias_display = if cmd.alias_3 != cmd.name {
@@ -762,18 +830,26 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
         .collect();
     menu_items.push(cancel_option());
 
-    let selection = Select::with_theme(theme)
-        .with_prompt("Select a command to run")
-        .items(&menu_items)
-        .default(0)
-        .interact()?;
+    let selection = if cat_selection == 4 {
+        FuzzySelect::with_theme(theme)
+            .with_prompt("Type to filter commands")
+            .items(&menu_items)
+            .default(0)
+            .interact()?
+    } else {
+        Select::with_theme(theme)
+            .with_prompt("Select command to execute")
+            .items(&menu_items)
+            .default(0)
+            .interact()?
+    };
 
-    if selection >= ALL_COMMANDS.len() {
+    if selection >= target_commands.len() {
         println!("Cancelled.");
         return Ok(());
     }
 
-    let selected = ALL_COMMANDS[selection];
+    let selected = target_commands[selection];
     let new_args = vec!["run".to_string(), selected.name.to_string()];
     let cli = Cli::try_parse_from(&new_args)?;
     if let Some(cmd) = cli.command {
@@ -1346,7 +1422,8 @@ fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
                     display_items.push(cancel_option());
 
                     let prompt = format!("Multiple folders match '{query}'. Select target:");
-                    let selection = Select::with_theme(theme)
+                    ui::print_key_hints();
+                    let selection = FuzzySelect::with_theme(theme)
                         .with_prompt(prompt)
                         .items(&display_items)
                         .default(0)
@@ -1393,8 +1470,9 @@ fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
             }
             options.push(cancel_option());
 
-            let selection = Select::with_theme(theme)
-                .with_prompt("Select target folder")
+            ui::print_key_hints();
+            let selection = FuzzySelect::with_theme(theme)
+                .with_prompt("Select target folder (type to filter)")
                 .items(&options)
                 .default(0)
                 .interact_on(&term)?;
@@ -1663,7 +1741,9 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
         }
         None => {
             let term = dialoguer::console::Term::stderr();
+            let mut sp = ui::Spinner::start("Scanning development hubs for projects...");
             let scanned = scan_projects(&home_dir, &current_dir);
+            sp.stop();
             if scanned.is_empty() {
                 bail!("no projects found in common development hubs");
             }
@@ -1671,20 +1751,22 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
             let home_str = home_dir.to_string_lossy();
             let mut display_items: Vec<String> = scanned
                 .iter()
-                .take(30)
                 .map(|p| {
                     let p_str = p.to_string_lossy();
-                    if p_str.starts_with(home_str.as_ref()) {
+                    let short_path = if p_str.starts_with(home_str.as_ref()) {
                         format!("~{}", &p_str[home_str.len()..])
                     } else {
                         p_str.to_string()
-                    }
+                    };
+                    let badge = ui::detect_stack_badge(p);
+                    format!("{:<38} {}", short_path, badge)
                 })
                 .collect();
             display_items.push(cancel_option());
 
-            let selection = Select::with_theme(theme)
-                .with_prompt("Select project")
+            ui::print_key_hints();
+            let selection = FuzzySelect::with_theme(theme)
+                .with_prompt("Select project (type to filter)")
                 .items(&display_items)
                 .default(0)
                 .interact_on(&term)?;
@@ -1714,6 +1796,8 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("project");
+
+    ui::render_breadcrumbs(&["run", "project", project_name, "Select Action"]);
     let prompt = format!("Open '{project_name}' with:");
 
     let ide_selection = Select::with_theme(theme)

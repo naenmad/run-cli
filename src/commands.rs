@@ -8,8 +8,10 @@ use colored::Colorize;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Input, Select};
 
+use crate::ui;
+
 fn electric_blue(text: &str) -> colored::ColoredString {
-    text.truecolor(0, 162, 255)
+    ui::electric_blue(text)
 }
 
 /// Helper to format byte sizes into readable units
@@ -1161,7 +1163,9 @@ pub fn handle_clean(theme: &ColorfulTheme, target_path: Option<PathBuf>) -> Resu
         }
     }
 
+    let mut sp = ui::Spinner::start("Scanning for disposable build caches & artifacts...");
     scan_dir(&root, 0, &junk_names, &mut found_items);
+    sp.stop();
 
     if found_items.is_empty() {
         println!(
@@ -1175,12 +1179,21 @@ pub fn handle_clean(theme: &ColorfulTheme, target_path: Option<PathBuf>) -> Resu
 
     let total_reclaimable: u64 = found_items.iter().map(|(_, sz)| sz).sum();
 
-    println!();
-    println!(
-        "Found {} disposable artifact(s) totaling {}:",
-        found_items.len().to_string().bold(),
-        electric_blue(&format_bytes(total_reclaimable)).bold()
-    );
+    let rows = [
+        ("Directory", root.display().to_string()),
+        (
+            "Artifacts",
+            format!("{} target(s) found", found_items.len())
+                .yellow()
+                .bold()
+                .to_string(),
+        ),
+        (
+            "Reclaimable",
+            format_bytes(total_reclaimable).green().bold().to_string(),
+        ),
+    ];
+    ui::print_card("🧹 CLEANUP TARGETS DETECTED", &rows);
 
     for (p, sz) in &found_items {
         let rel_path = p.strip_prefix(&root).unwrap_or(p);
@@ -1381,10 +1394,30 @@ pub fn handle_sync(
         return Ok(());
     }
 
-    println!(
-        "{}",
-        electric_blue("Detected changes in repository:").bold()
+    let current_branch = Command::new("git")
+        .args(["branch", "--show-current"])
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|| "detached".to_string());
+
+    let branch_badge = format!(
+        "{} {}",
+        current_branch.magenta().bold(),
+        " 🌿 [Git] ".bold().bright_green().on_black()
     );
+    let rows = [
+        ("Branch", branch_badge),
+        (
+            "Modified Files",
+            format!("{} file(s) changed", status_text.lines().count())
+                .yellow()
+                .bold()
+                .to_string(),
+        ),
+    ];
+    ui::print_card("GIT WORKSPACE STATUS", &rows);
+
     for line in status_text.lines().take(15) {
         println!("  {line}");
     }
@@ -1457,10 +1490,7 @@ fn copy_to_clipboard(text: &str) -> Result<()> {
 
 /// network (alias: net, ip) - Inspect LAN and public IP addresses
 pub fn handle_net(theme: &ColorfulTheme) -> Result<()> {
-    println!(
-        "{}",
-        electric_blue("Inspecting network interfaces and IP addresses...").bold()
-    );
+    let mut sp = ui::Spinner::start("Inspecting network interfaces and IP addresses...");
 
     let mut local_ips = Vec::new();
     for iface in ["en0", "en1", "en2", "en3", "en4", "bridge0"] {
@@ -1485,21 +1515,37 @@ pub fn handle_net(theme: &ColorfulTheme) -> Result<()> {
             }
         });
 
-    println!();
-    println!("{}", "NETWORK ADDRESS SUMMARY:".bold());
+    sp.stop();
+
+    let mut rows: Vec<(&str, String)> = Vec::new();
     if local_ips.is_empty() {
-        println!("  Local IP:   {}", "Not connected to LAN".dimmed());
+        rows.push(("Local IP", "Not connected to LAN".dimmed().to_string()));
     } else {
         for (iface, ip) in &local_ips {
-            println!("  Local IP:   {} ({})", ip.bold(), iface.dimmed());
+            rows.push((
+                iface.as_str(),
+                format!(
+                    "{} {}",
+                    ip.bold(),
+                    " 🌐 [LAN] ".bold().bright_blue().on_black()
+                ),
+            ));
         }
     }
 
     match &public_ip {
-        Some(pub_ip) => println!("  Public IP:  {}", pub_ip.bold().green()),
-        None => println!("  Public IP:  {}", "Offline / unreachable".dimmed()),
+        Some(pub_ip) => rows.push((
+            "Public IP",
+            format!(
+                "{} {}",
+                pub_ip.bold().green(),
+                " 🌍 [WAN] ".bold().bright_green().on_black()
+            ),
+        )),
+        None => rows.push(("Public IP", "Offline / unreachable".dimmed().to_string())),
     }
-    println!();
+
+    ui::print_card("🌐 NETWORK INTERFACE SUMMARY", &rows);
 
     let cancel_btn = cancel_option();
     let mut copy_options = Vec::new();
@@ -1638,25 +1684,29 @@ pub fn handle_bench(theme: &ColorfulTheme, command_args: &[String]) -> Result<()
         "{}",
         "--------------------------------------------------".dimmed()
     );
-    println!("{}", "BENCHMARK RESULT:".bold());
-    println!("  Command:     {}", target_cmd.yellow().bold());
-    println!(
-        "  Duration:    {}",
-        format!("{:.2?} ({:.3}s)", duration, duration.as_secs_f64())
-            .green()
-            .bold()
-    );
-    println!(
-        "  Exit Code:   {}",
-        if status.success() {
-            "0 (Success)".green().bold()
-        } else {
-            format!("{} (Failed)", status.code().unwrap_or(-1))
+    let exit_val = if status.success() {
+        format!("{}", "0 (Success) 🟢".green().bold())
+    } else {
+        format!(
+            "{}",
+            format!("{} (Failed) 🔴", status.code().unwrap_or(-1))
                 .red()
                 .bold()
-        }
-    );
-    println!();
+        )
+    };
+
+    let rows = [
+        ("Command", target_cmd.yellow().bold().to_string()),
+        (
+            "Duration",
+            format!("{:.2?} ({:.3}s)", duration, duration.as_secs_f64())
+                .green()
+                .bold()
+                .to_string(),
+        ),
+        ("Exit Code", exit_val),
+    ];
+    ui::print_card("⏱️  BENCHMARK RESULT", &rows);
 
     Ok(())
 }
