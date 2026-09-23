@@ -2508,6 +2508,7 @@ pub fn handle_config(
                     cfg.primary_color.unwrap_or_else(|| "electric-blue".into())
                 ),
                 "auto_clear" | "clear" => println!("{}", cfg.auto_clear.unwrap_or(false)),
+                "compact_mode" | "compact" => println!("{}", cfg.compact_mode.unwrap_or(false)),
                 "default_ide" | "ide" => {
                     println!("{}", cfg.default_ide.unwrap_or_else(|| "ask".into()))
                 }
@@ -2517,7 +2518,7 @@ pub fn handle_config(
                     }
                 }
                 other => bail!(
-                    "unknown configuration key '{other}'. Valid keys: primary_color, auto_clear, default_ide, custom_hubs"
+                    "unknown configuration key '{other}'. Valid keys: primary_color, auto_clear, compact_mode, default_ide, custom_hubs"
                 ),
             }
         }
@@ -2541,6 +2542,13 @@ pub fn handle_config(
                     config::save_config(&cfg)?;
                     println!("{} Set auto_clear to {}", "✔".green().bold(), b);
                 }
+                "compact_mode" | "compact" => {
+                    let b =
+                        val_str == "true" || val_str == "1" || val_str == "yes" || val_str == "on";
+                    cfg.compact_mode = Some(b);
+                    config::save_config(&cfg)?;
+                    println!("{} Set compact_mode to {}", "✔".green().bold(), b);
+                }
                 "default_ide" | "ide" => {
                     cfg.default_ide = Some(val_str.to_string());
                     config::save_config(&cfg)?;
@@ -2554,7 +2562,7 @@ pub fn handle_config(
                     println!("{} Added '{}' to custom_hubs", "✔".green().bold(), val_str);
                 }
                 other => bail!(
-                    "unknown configuration key '{other}'. Valid keys: primary_color, auto_clear, default_ide, custom_hubs"
+                    "unknown configuration key '{other}'. Valid keys: primary_color, auto_clear, compact_mode, default_ide, custom_hubs"
                 ),
             }
         }
@@ -2616,6 +2624,11 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
     } else {
         "Disabled ⚪".dimmed().to_string()
     };
+    let compact_mode_str = if cfg.compact_mode.unwrap_or(false) {
+        "Enabled 🟢".green().to_string()
+    } else {
+        "Disabled ⚪".dimmed().to_string()
+    };
     let ide_str = cfg
         .default_ide
         .clone()
@@ -2642,6 +2655,7 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
             ("Primary Color", swatch),
             ("Default Editor", ide_str),
             ("Auto Clear", auto_clear_str),
+            ("Compact Mode", compact_mode_str),
             ("Custom Hubs", hubs_count),
             ("Config File", config_file_path),
         ],
@@ -2652,9 +2666,10 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
         "🎨 1. Change Primary Color (Palette or Custom HEX)",
         "🖥️  2. Set Default Project Editor / IDE",
         "🧹 3. Toggle Auto-Clear Terminal Screen",
-        "📁 4. Add Custom Workspace Project Hub",
-        "📝 5. Open config.toml in Editor",
-        "🔄 6. Reset Configuration to Factory Defaults",
+        "🗜️  4. Toggle Compact Mode (Minimalist Banner & Layout)",
+        "📁 5. Add Custom Workspace Project Hub",
+        "📝 6. Open config.toml in Editor",
+        "🔄 7. Reset Configuration to Factory Defaults",
         &cancel_btn,
     ];
 
@@ -2784,6 +2799,18 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
             }
         }
         3 => {
+            // Toggle compact_mode
+            let mut new_cfg = config::load_config();
+            let current = new_cfg.compact_mode.unwrap_or(false);
+            new_cfg.compact_mode = Some(!current);
+            config::save_config(&new_cfg)?;
+            if !current {
+                println!("{}", "Compact mode enabled! 🗜️".green().bold());
+            } else {
+                println!("{}", "Compact mode disabled. ⚪".yellow().bold());
+            }
+        }
+        4 => {
             // Add custom hub
             let hub_input: String = Input::with_theme(theme)
                 .with_prompt("Enter directory path to scan for projects (leave blank to cancel)")
@@ -2813,7 +2840,7 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
                 println!("Hub already registered in configuration.");
             }
         }
-        4 => {
+        5 => {
             let path = config::config_path()?;
             if !path.exists() {
                 let _ = config::load_config();
@@ -2821,7 +2848,7 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
             let _ = Command::new("open").arg(&path).status();
             println!("Opened config file in editor: {}", path.display());
         }
-        5 if Confirm::with_theme(theme)
+        6 if Confirm::with_theme(theme)
             .with_prompt("Reset configuration to factory defaults?")
             .default(false)
             .interact()? =>

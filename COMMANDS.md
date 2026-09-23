@@ -281,6 +281,10 @@ run cfg get default_ide
 # Toggle auto-clear terminal screen:
 run cfg set auto_clear true
 
+# Toggle compact mode (minimalist layout without large banners):
+run cfg set compact_mode true
+run cfg get compact_mode
+
 # Print config file path or open in system editor:
 run cfg path
 run cfg edit
@@ -301,8 +305,11 @@ run cfg reset
 # Or use any custom HEX color code: "#ff007f", "#8b5cf6", "#10b981", "#00a2ff"
 primary_color = "electric-blue"
 
-# Automatically clear terminal screen before interactive menus:
+# Automatically clear terminal screen before running commands and interactive menus:
 auto_clear = false
+
+# Compact mode (sleek minimalist layout without large ASCII banners):
+compact_mode = false
 
 # Default editor to open projects directly without prompting:
 # Options: "antigravity", "cursor", "vscode", "xcode", "terminal", "ask" (default)

@@ -102,8 +102,11 @@ Now `run go root`, `run go back`, or selecting a project with **"Switch Terminal
 # Or use any custom HEX color code: "#ff007f", "#8b5cf6", "#10b981", "#00a2ff"
 primary_color = "electric-blue"
 
-# Automatically clear terminal screen before interactive menus
+# Automatically clear terminal screen before running commands and interactive menus
 auto_clear = false
+
+# Compact mode (sleek minimalist layout without large ASCII banners)
+compact_mode = false
 
 # Default editor to open projects directly without prompting:
 # Options: "antigravity", "cursor", "vscode", "xcode", "terminal", "ask" (default)

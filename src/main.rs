@@ -1034,6 +1034,8 @@ fn run_app() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let theme = custom_theme();
 
+    ui::maybe_auto_clear();
+
     if args.len() <= 1 {
         if std::io::stdin().is_terminal() {
             return handle_all_commands_menu(&theme);

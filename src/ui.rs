@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -27,8 +27,31 @@ pub fn cancel_option() -> String {
 /// Clears terminal screen if user configured auto_clear = true
 pub fn maybe_auto_clear() {
     let cfg = crate::config::load_config();
-    if cfg.auto_clear.unwrap_or(false) {
-        let _ = std::process::Command::new("clear").status();
+    if !cfg.auto_clear.unwrap_or(false) {
+        return;
+    }
+
+    // Do not clear during shell eval / completion generation or non-interactive queries
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 {
+        let first = args[1].to_lowercase();
+        if first == "init" || first == "ini" || first == "completion" || first == "cmp" {
+            return;
+        }
+        if (first == "config" || first == "cfg" || first == "conf") && args.len() > 2 {
+            let action = args[2].to_lowercase();
+            if action == "get" || action == "path" {
+                return;
+            }
+        }
+    }
+
+    // Must have a real interactive terminal on stderr or stdout
+    if std::io::stderr().is_terminal() || std::io::stdout().is_terminal() {
+        let clear_seq = "\x1B[2J\x1B[3J\x1B[H";
+        let mut err = std::io::stderr();
+        let _ = err.write_all(clear_seq.as_bytes());
+        let _ = err.flush();
     }
 }
 
@@ -240,8 +263,20 @@ pub fn visible_len(s: &str) -> usize {
     len
 }
 
-/// Print modern minimalist header banner for run CLI
+/// Print modern header banner for run CLI
 pub fn print_banner() {
+    let cfg = crate::config::load_config();
+    if cfg.compact_mode.unwrap_or(false) {
+        println!(
+            "{} {} {}",
+            "⚡".bold(),
+            primary_colored("run").bold(),
+            "v0.3.0".dimmed()
+        );
+        println!();
+        return;
+    }
+
     println!();
     let top = "╭────────────────────────────────────────────────────────────╮";
     let title = format!(
@@ -286,8 +321,18 @@ pub fn print_key_hints() {
     );
 }
 
-/// Print a stylish rounded card panel with key-value information
+/// Print a stylish card panel with key-value information
 pub fn print_card(title: &str, rows: &[(&str, String)]) {
+    let cfg = crate::config::load_config();
+    if cfg.compact_mode.unwrap_or(false) {
+        println!("{}", format!("● {}", title).bold());
+        for (label, val) in rows {
+            println!("  {:<16} : {}", label.dimmed(), val);
+        }
+        println!();
+        return;
+    }
+
     let max_label_len = rows
         .iter()
         .map(|(k, _)| visible_len(k))
