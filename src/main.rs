@@ -74,11 +74,7 @@ enum MakeTargetType {
 
 fn main() {
     if let Err(err) = run_app() {
-        eprintln!(
-            "\n{} {}\n",
-            "❌ Error:".bold().red(),
-            format!("{err:#}").red()
-        );
+        eprintln!("{} {err:#}", "error:".bold().red());
         std::process::exit(1);
     }
 }
@@ -112,10 +108,9 @@ fn handle_make(
     let resolved_type = match target_type {
         Some(t) => t,
         None => {
-            println!("\n{} {}", "🚀".cyan(), "Interactive Item Creation".bold().cyan());
             let options = ["Folder", "File"];
             let selection = Select::with_theme(theme)
-                .with_prompt("Choose item type to create")
+                .with_prompt("Select item type to create")
                 .items(&options)
                 .default(0)
                 .interact()?;
@@ -131,8 +126,8 @@ fn handle_make(
         Some(path) => path,
         None => {
             let prompt_text = match resolved_type {
-                MakeTargetType::Folder => "Enter new folder path",
-                MakeTargetType::File => "Enter new file path",
+                MakeTargetType::Folder => "Folder path",
+                MakeTargetType::File => "File path",
             };
             let input: String = Input::with_theme(theme)
                 .with_prompt(prompt_text)
@@ -152,9 +147,8 @@ fn handle_open(theme: &ColorfulTheme, target: Option<String>) -> Result<()> {
     let app_name = match target {
         Some(name) => name,
         None => {
-            println!("\n{} {}", "ℹ️".cyan(), "Open macOS Application".bold().cyan());
             let input: String = Input::with_theme(theme)
-                .with_prompt("Enter application name")
+                .with_prompt("Application name")
                 .interact_text()?;
             input.trim().to_string()
         }
@@ -164,27 +158,17 @@ fn handle_open(theme: &ColorfulTheme, target: Option<String>) -> Result<()> {
         bail!("Application name cannot be empty");
     }
 
-    println!(
-        "\n{} {}",
-        "🚀".cyan(),
-        format!("Launching application '{app_name}'...").cyan()
-    );
-
     let status = Command::new("open")
         .arg("-a")
         .arg(&app_name)
         .status()
-        .with_context(|| format!("Failed to execute 'open -a {app_name}'"))?;
+        .with_context(|| format!("failed to execute 'open -a {app_name}'"))?;
 
     if !status.success() {
-        bail!("Application '{app_name}' was not found or failed to launch");
+        bail!("application '{app_name}' was not found or failed to launch");
     }
 
-    println!(
-        "{} {}\n",
-        "✅".green(),
-        format!("Success: '{app_name}' is now open.").bold().green()
-    );
+    println!("Opened application: {app_name}");
     Ok(())
 }
 
@@ -197,9 +181,8 @@ fn handle_copy(
     let src = match source {
         Some(path) => path,
         None => {
-            println!("\n{} {}", "ℹ️".cyan(), "Copy Item".bold().cyan());
             let input: String = Input::with_theme(theme)
-                .with_prompt("Enter source path (file or folder)")
+                .with_prompt("Source path")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
@@ -209,7 +192,7 @@ fn handle_copy(
         Some(path) => path,
         None => {
             let input: String = Input::with_theme(theme)
-                .with_prompt("Enter destination path")
+                .with_prompt("Destination path")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
@@ -227,9 +210,8 @@ fn handle_move(
     let src = match source {
         Some(path) => path,
         None => {
-            println!("\n{} {}", "ℹ️".cyan(), "Move or Rename Item".bold().cyan());
             let input: String = Input::with_theme(theme)
-                .with_prompt("Enter source path (file or folder)")
+                .with_prompt("Source path")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
@@ -239,7 +221,7 @@ fn handle_move(
         Some(path) => path,
         None => {
             let input: String = Input::with_theme(theme)
-                .with_prompt("Enter destination path")
+                .with_prompt("Destination path")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
@@ -253,36 +235,27 @@ fn handle_del(theme: &ColorfulTheme, target: Option<PathBuf>) -> Result<()> {
     let path = match target {
         Some(p) => p,
         None => {
-            println!("\n{} {}", "⚠️".yellow(), "Delete Item".bold().yellow());
             let input: String = Input::with_theme(theme)
-                .with_prompt("Enter path to delete")
+                .with_prompt("Path to delete")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
     };
 
     if !path.exists() {
-        bail!("Target path does not exist: {}", path.display());
+        bail!("path does not exist: {}", path.display());
     }
 
     let item_kind = if path.is_dir() { "directory" } else { "file" };
-
-    let prompt = format!(
-        "⚠️  Are you sure you want to permanently delete {item_kind} '{}'?",
-        path.display()
-    );
+    let prompt = format!("Delete {item_kind} '{}'?", path.display());
 
     let confirmation = Confirm::with_theme(theme)
-        .with_prompt(prompt.yellow().to_string())
+        .with_prompt(prompt)
         .default(false)
         .interact()?;
 
     if !confirmation {
-        println!(
-            "\n{} {}\n",
-            "⚠️".yellow(),
-            "Warning: Deletion cancelled by user.".yellow()
-        );
+        println!("Cancelled.");
         return Ok(());
     }
 
@@ -292,15 +265,9 @@ fn handle_del(theme: &ColorfulTheme, target: Option<PathBuf>) -> Result<()> {
 /// Creates a nested directory tree using fs::create_dir_all.
 fn make_directory(path: &Path) -> Result<()> {
     fs::create_dir_all(path)
-        .with_context(|| format!("Failed to create directory '{}'", path.display()))?;
+        .with_context(|| format!("failed to create directory '{}'", path.display()))?;
 
-    println!(
-        "\n{} {}\n",
-        "✅".green(),
-        format!("Success: Directory '{}' created.", path.display())
-            .bold()
-            .green()
-    );
+    println!("Created directory: {}", path.display());
     Ok(())
 }
 
@@ -309,22 +276,16 @@ fn create_empty_file(path: &Path) -> Result<()> {
     ensure_parent_exists(path)?;
 
     fs::File::create_new(path)
-        .with_context(|| format!("Failed to create file '{}' (file may already exist)", path.display()))?;
+        .with_context(|| format!("failed to create file '{}' (file may already exist)", path.display()))?;
 
-    println!(
-        "\n{} {}\n",
-        "✅".green(),
-        format!("Success: File '{}' created.", path.display())
-            .bold()
-            .green()
-    );
+    println!("Created file: {}", path.display());
     Ok(())
 }
 
 /// Copies a single file or recursively copies an entire directory tree.
 fn copy_item(source: &Path, destination: &Path) -> Result<()> {
     if !source.exists() {
-        bail!("Source does not exist: {}", source.display());
+        bail!("source does not exist: {}", source.display());
     }
 
     if source.is_dir() {
@@ -333,24 +294,14 @@ fn copy_item(source: &Path, destination: &Path) -> Result<()> {
         ensure_parent_exists(destination)?;
         fs::copy(source, destination).with_context(|| {
             format!(
-                "Failed to copy file from '{}' to '{}'",
+                "failed to copy file from '{}' to '{}'",
                 source.display(),
                 destination.display()
             )
         })?;
     }
 
-    println!(
-        "\n{} {}\n",
-        "✅".green(),
-        format!(
-            "Success: Copied '{}' to '{}'.",
-            source.display(),
-            destination.display()
-        )
-        .bold()
-        .green()
-    );
+    println!("Copied '{}' to '{}'", source.display(), destination.display());
     Ok(())
 }
 
@@ -358,7 +309,7 @@ fn copy_item(source: &Path, destination: &Path) -> Result<()> {
 fn copy_directory_recursive(source: &Path, destination: &Path) -> Result<()> {
     fs::create_dir_all(destination).with_context(|| {
         format!(
-            "Failed to create destination directory '{}'",
+            "failed to create destination directory '{}'",
             destination.display()
         )
     })?;
@@ -381,30 +332,20 @@ fn copy_directory_recursive(source: &Path, destination: &Path) -> Result<()> {
 /// Moves or renames a file or directory to a target location.
 fn move_item(source: &Path, destination: &Path) -> Result<()> {
     if !source.exists() {
-        bail!("Source does not exist: {}", source.display());
+        bail!("source does not exist: {}", source.display());
     }
 
     ensure_parent_exists(destination)?;
 
     fs::rename(source, destination).with_context(|| {
         format!(
-            "Failed to move '{}' to '{}'",
+            "failed to move '{}' to '{}'",
             source.display(),
             destination.display()
         )
     })?;
 
-    println!(
-        "\n{} {}\n",
-        "✅".green(),
-        format!(
-            "Success: Moved '{}' to '{}'.",
-            source.display(),
-            destination.display()
-        )
-        .bold()
-        .green()
-    );
+    println!("Moved '{}' to '{}'", source.display(), destination.display());
     Ok(())
 }
 
@@ -412,21 +353,15 @@ fn move_item(source: &Path, destination: &Path) -> Result<()> {
 fn delete_item(path: &Path) -> Result<()> {
     let item_kind = if path.is_dir() {
         fs::remove_dir_all(path)
-            .with_context(|| format!("Failed to delete directory '{}'", path.display()))?;
-        "Directory"
+            .with_context(|| format!("failed to delete directory '{}'", path.display()))?;
+        "directory"
     } else {
         fs::remove_file(path)
-            .with_context(|| format!("Failed to delete file '{}'", path.display()))?;
-        "File"
+            .with_context(|| format!("failed to delete file '{}'", path.display()))?;
+        "file"
     };
 
-    println!(
-        "\n{} {}\n",
-        "✅".green(),
-        format!("Success: {item_kind} '{}' deleted.", path.display())
-            .bold()
-            .green()
-    );
+    println!("Deleted {item_kind}: {}", path.display());
     Ok(())
 }
 
@@ -437,7 +372,7 @@ fn ensure_parent_exists(path: &Path) -> Result<()> {
         && !parent.exists()
     {
         fs::create_dir_all(parent).with_context(|| {
-            format!("Failed to create parent directory '{}'", parent.display())
+            format!("failed to create parent directory '{}'", parent.display())
         })?;
     }
     Ok(())
@@ -452,7 +387,7 @@ fn clear_terminal() -> Result<()> {
     print!("\x1B[2J\x1B[1;1H");
     std::io::stdout()
         .flush()
-        .context("Failed to flush stdout")?;
+        .context("failed to flush stdout")?;
 
     Ok(())
 }
