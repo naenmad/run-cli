@@ -9,7 +9,7 @@ use dialoguer::{Confirm, Input, Select};
 
 #[derive(Parser)]
 #[command(name = "run")]
-#[command(about = "CLI utilitas produktivitas untuk macOS dengan mode ganda", version)]
+#[command(about = "Productivity CLI utility for macOS with dual-mode interaction", version)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -17,49 +17,49 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Membuat folder atau file baru secara langsung atau melalui menu interaktif
+    /// Create a new folder or file directly or through an interactive menu
     #[command(alias = "mak")]
     Make {
-        /// Jenis target yang akan dibuat
+        /// Target type to create
         #[arg(value_enum)]
         target_type: Option<MakeTargetType>,
-        /// Nama atau jalur berkas/folder
+        /// Name or path of the target item
         name: Option<PathBuf>,
     },
 
-    /// Membuka aplikasi macOS menggunakan perintah open -a
+    /// Open a macOS application using open -a
     #[command(alias = "opn")]
     Open {
-        /// Nama aplikasi target
+        /// Target application name
         target: Option<String>,
     },
 
-    /// Menyalin file atau folder dari sumber ke tujuan
+    /// Copy a file or folder from source to destination
     #[command(name = "copy", alias = "cpy")]
     Copy {
-        /// File atau folder sumber
+        /// Source file or folder
         source: Option<PathBuf>,
-        /// Lokasi tujuan
+        /// Destination path
         destination: Option<PathBuf>,
     },
 
-    /// Memindahkan atau mengganti nama file atau folder
+    /// Move or rename a file or folder
     #[command(name = "move", alias = "mov")]
     Move {
-        /// File atau folder sumber
+        /// Source file or folder
         source: Option<PathBuf>,
-        /// Lokasi tujuan
+        /// Destination path
         destination: Option<PathBuf>,
     },
 
-    /// Menghapus file atau folder dengan konfirmasi aman
+    /// Delete a file or folder with safe confirmation
     #[command(name = "del", alias = "dlt", alias = "delete")]
     Del {
-        /// Jalur file atau folder yang akan dihapus
+        /// Path of the file or folder to delete
         target: Option<PathBuf>,
     },
 
-    /// Membersihkan layar terminal
+    /// Clear the terminal screen
     #[command(name = "clear", alias = "clr")]
     Clear,
 }
@@ -89,14 +89,14 @@ fn main() -> Result<()> {
     }
 }
 
-/// Menangani pembuatan folder atau file dalam mode langsung maupun interaktif.
+/// Handles folder or file creation in both direct and interactive modes.
 fn handle_make(target_type: Option<MakeTargetType>, name: Option<PathBuf>) -> Result<()> {
     let resolved_type = match target_type {
         Some(t) => t,
         None => {
             let options = ["Folder", "File"];
             let selection = Select::new()
-                .with_prompt("Pilih jenis item yang ingin dibuat")
+                .with_prompt("Select item type to create")
                 .items(&options)
                 .default(0)
                 .interact()?;
@@ -112,8 +112,8 @@ fn handle_make(target_type: Option<MakeTargetType>, name: Option<PathBuf>) -> Re
         Some(path) => path,
         None => {
             let prompt_text = match resolved_type {
-                MakeTargetType::Folder => "Nama atau jalur folder",
-                MakeTargetType::File => "Nama atau jalur file",
+                MakeTargetType::Folder => "Folder name or path",
+                MakeTargetType::File => "File name or path",
             };
             let input: String = Input::new()
                 .with_prompt(prompt_text)
@@ -128,43 +128,43 @@ fn handle_make(target_type: Option<MakeTargetType>, name: Option<PathBuf>) -> Re
     }
 }
 
-/// Menangani pembukaan aplikasi macOS dengan fallback prompt jika target belum diberikan.
+/// Handles opening macOS applications with a fallback prompt when target is omitted.
 fn handle_open(target: Option<String>) -> Result<()> {
     let app_name = match target {
         Some(name) => name,
         None => {
             let input: String = Input::new()
-                .with_prompt("Nama aplikasi macOS yang ingin dibuka")
+                .with_prompt("Name of macOS application to open")
                 .interact_text()?;
             input.trim().to_string()
         }
     };
 
     if app_name.is_empty() {
-        bail!("Nama aplikasi tidak boleh kosong");
+        bail!("Application name cannot be empty");
     }
 
     let status = Command::new("open")
         .arg("-a")
         .arg(&app_name)
         .status()
-        .with_context(|| format!("Gagal mengeksekusi 'open -a {app_name}'"))?;
+        .with_context(|| format!("Failed to execute 'open -a {app_name}'"))?;
 
     if !status.success() {
-        bail!("Aplikasi '{app_name}' tidak ditemukan atau gagal dibuka");
+        bail!("Application '{app_name}' was not found or failed to launch");
     }
 
-    println!("Aplikasi '{app_name}' berhasil dibuka.");
+    println!("Application '{app_name}' opened.");
     Ok(())
 }
 
-/// Menangani penyalinan item dengan meminta sumber dan tujuan jika tidak disediakan di argumen CLI.
+/// Handles copying items with interactive prompts when arguments are missing.
 fn handle_copy(source: Option<PathBuf>, destination: Option<PathBuf>) -> Result<()> {
     let src = match source {
         Some(path) => path,
         None => {
             let input: String = Input::new()
-                .with_prompt("Jalur sumber (file atau folder)")
+                .with_prompt("Source path (file or folder)")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
@@ -174,7 +174,7 @@ fn handle_copy(source: Option<PathBuf>, destination: Option<PathBuf>) -> Result<
         Some(path) => path,
         None => {
             let input: String = Input::new()
-                .with_prompt("Jalur tujuan")
+                .with_prompt("Destination path")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
@@ -183,13 +183,13 @@ fn handle_copy(source: Option<PathBuf>, destination: Option<PathBuf>) -> Result<
     copy_item(&src, &dst)
 }
 
-/// Menangani pemindahan atau penggantian nama item dengan fallback input interaktif.
+/// Handles moving or renaming items with interactive prompts when arguments are missing.
 fn handle_move(source: Option<PathBuf>, destination: Option<PathBuf>) -> Result<()> {
     let src = match source {
         Some(path) => path,
         None => {
             let input: String = Input::new()
-                .with_prompt("Jalur sumber (file atau folder)")
+                .with_prompt("Source path (file or folder)")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
@@ -199,7 +199,7 @@ fn handle_move(source: Option<PathBuf>, destination: Option<PathBuf>) -> Result<
         Some(path) => path,
         None => {
             let input: String = Input::new()
-                .with_prompt("Jalur tujuan")
+                .with_prompt("Destination path")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
@@ -208,59 +208,59 @@ fn handle_move(source: Option<PathBuf>, destination: Option<PathBuf>) -> Result<
     move_item(&src, &dst)
 }
 
-/// Menangani penghapusan file atau folder dengan dialog konfirmasi ya atau tidak.
+/// Handles file or folder deletion with a safe confirmation dialog.
 fn handle_del(target: Option<PathBuf>) -> Result<()> {
     let path = match target {
         Some(p) => p,
         None => {
             let input: String = Input::new()
-                .with_prompt("Jalur file atau folder yang ingin dihapus")
+                .with_prompt("Path of file or folder to delete")
                 .interact_text()?;
             PathBuf::from(input.trim())
         }
     };
 
     if !path.exists() {
-        bail!("Jalur target tidak ditemukan: {}", path.display());
+        bail!("Target path does not exist: {}", path.display());
     }
 
     let confirmation = Confirm::new()
-        .with_prompt(format!("Yakin ingin menghapus '{}'?", path.display()))
+        .with_prompt(format!("Are you sure you want to delete '{}'?", path.display()))
         .default(false)
         .interact()?;
 
     if !confirmation {
-        println!("Operasi penghapusan dibatalkan.");
+        println!("Deletion cancelled.");
         return Ok(());
     }
 
     delete_item(&path)
 }
 
-/// Membuat direktori bersarang menggunakan fs::create_dir_all.
+/// Creates a nested directory tree using fs::create_dir_all.
 fn make_directory(path: &Path) -> Result<()> {
     fs::create_dir_all(path)
-        .with_context(|| format!("Gagal membuat direktori '{}'", path.display()))?;
+        .with_context(|| format!("Failed to create directory '{}'", path.display()))?;
 
-    println!("Direktori berhasil dibuat: {}", path.display());
+    println!("Directory created: {}", path.display());
     Ok(())
 }
 
-/// Membuat file kosong baru serta membuat direktori induknya bila belum tersedia.
+/// Creates a new empty file and ensures the parent directory exists.
 fn create_empty_file(path: &Path) -> Result<()> {
     ensure_parent_exists(path)?;
 
     fs::File::create_new(path)
-        .with_context(|| format!("Gagal membuat file '{}' (file mungkin sudah ada)", path.display()))?;
+        .with_context(|| format!("Failed to create file '{}' (file may already exist)", path.display()))?;
 
-    println!("File berhasil dibuat: {}", path.display());
+    println!("File created: {}", path.display());
     Ok(())
 }
 
-/// Menyalin file atau memanggil penyalinan direktori rekursif jika sumber adalah folder.
+/// Copies a single file or recursively copies an entire directory tree.
 fn copy_item(source: &Path, destination: &Path) -> Result<()> {
     if !source.exists() {
-        bail!("Sumber tidak ditemukan: {}", source.display());
+        bail!("Source does not exist: {}", source.display());
     }
 
     if source.is_dir() {
@@ -269,7 +269,7 @@ fn copy_item(source: &Path, destination: &Path) -> Result<()> {
         ensure_parent_exists(destination)?;
         fs::copy(source, destination).with_context(|| {
             format!(
-                "Gagal menyalin file dari '{}' ke '{}'",
+                "Failed to copy file from '{}' to '{}'",
                 source.display(),
                 destination.display()
             )
@@ -277,18 +277,18 @@ fn copy_item(source: &Path, destination: &Path) -> Result<()> {
     }
 
     println!(
-        "Berhasil menyalin '{}' ke '{}'",
+        "Copied '{}' to '{}'",
         source.display(),
         destination.display()
     );
     Ok(())
 }
 
-/// Menyalin pohon direktori secara rekursif ke lokasi tujuan.
+/// Recursively copies a directory tree to a target destination.
 fn copy_directory_recursive(source: &Path, destination: &Path) -> Result<()> {
     fs::create_dir_all(destination).with_context(|| {
         format!(
-            "Gagal membuat direktori tujuan '{}'",
+            "Failed to create destination directory '{}'",
             destination.display()
         )
     })?;
@@ -308,59 +308,59 @@ fn copy_directory_recursive(source: &Path, destination: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Memindahkan atau mengganti nama berkas atau folder ke lokasi tujuan.
+/// Moves or renames a file or directory to a target location.
 fn move_item(source: &Path, destination: &Path) -> Result<()> {
     if !source.exists() {
-        bail!("Sumber tidak ditemukan: {}", source.display());
+        bail!("Source does not exist: {}", source.display());
     }
 
     ensure_parent_exists(destination)?;
 
     fs::rename(source, destination).with_context(|| {
         format!(
-            "Gagal memindahkan '{}' ke '{}'",
+            "Failed to move '{}' to '{}'",
             source.display(),
             destination.display()
         )
     })?;
 
     println!(
-        "Berhasil memindahkan '{}' ke '{}'",
+        "Moved '{}' to '{}'",
         source.display(),
         destination.display()
     );
     Ok(())
 }
 
-/// Menghapus file tunggal atau menghapus seluruh direktori bersarang.
+/// Deletes a single file or an entire directory tree.
 fn delete_item(path: &Path) -> Result<()> {
     if path.is_dir() {
         fs::remove_dir_all(path)
-            .with_context(|| format!("Gagal menghapus direktori '{}'", path.display()))?;
-        println!("Direktori berhasil dihapus: {}", path.display());
+            .with_context(|| format!("Failed to delete directory '{}'", path.display()))?;
+        println!("Directory deleted: {}", path.display());
     } else {
         fs::remove_file(path)
-            .with_context(|| format!("Gagal menghapus file '{}'", path.display()))?;
-        println!("File berhasil dihapus: {}", path.display());
+            .with_context(|| format!("Failed to delete file '{}'", path.display()))?;
+        println!("File deleted: {}", path.display());
     }
 
     Ok(())
 }
 
-/// Memastikan direktori induk dari suatu jalur telah tersedia sebelum operasi berkas dilakukan.
+/// Ensures the parent directory of a path exists before file operations.
 fn ensure_parent_exists(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
         && !parent.exists()
     {
         fs::create_dir_all(parent).with_context(|| {
-            format!("Gagal membuat direktori induk '{}'", parent.display())
+            format!("Failed to create parent directory '{}'", parent.display())
         })?;
     }
     Ok(())
 }
 
-/// Mengosongkan tampilan layar terminal.
+/// Clears the terminal screen.
 fn clear_terminal() -> Result<()> {
     if Command::new("clear").status().is_ok() {
         return Ok(());
@@ -369,7 +369,7 @@ fn clear_terminal() -> Result<()> {
     print!("\x1B[2J\x1B[1;1H");
     std::io::stdout()
         .flush()
-        .context("Gagal melakukan flush ke stdout")?;
+        .context("Failed to flush stdout")?;
 
     Ok(())
 }

@@ -1,63 +1,66 @@
 # run
 
-`run` adalah CLI utilitas produktivitas untuk macOS yang dirancang dengan pendekatan human-friendly dan dual-mode interaction.
+`run` is a command-line productivity utility for macOS built around human-friendly verbs and dual-mode interaction.
 
-## Filosofi Utama
+## Core Philosophy
 
-* **Human-Friendly First**: Menggantikan perintah Unix klasik yang memerlukan banyak flag dengan kata kerja alami yang sesuai dengan alur berpikir manusia.
-* **Dual-Mode Execution**: Mendukung eksekusi cepat melalui argumen langsung (direct mode) serta panduan interaktif melalui terminal prompt jika argumen tidak diisi (interactive mode).
-* **Ergonomis**: Dirancang untuk kecepatan mengetik dan kenyamanan jari dengan standarisasi alias tepat tiga huruf.
+* **Human-Friendly First**: Replaces standard Unix command flags with direct, natural verbs that reflect common daily tasks.
+* **Dual-Mode Execution**: Accepts direct CLI arguments for quick execution, or drops into an interactive prompt menu when arguments are omitted.
+* **Ergonomic**: Standardized three-letter aliases across all commands reduce keystrokes and typing friction.
 
-## Standarisasi Perintah dan Alias
+## Commands and Aliases
 
-Setiap perintah utama memiliki nama penuh dan alias wajib sepanjang tepat 3 huruf:
+Every primary command supports both its full English verb and a mandatory three-letter alias:
 
-| Perintah Penuh | Alias (3 Huruf) | Fungsi Utama | Contoh Penggunaan |
+| Command | Alias (3 Letters) | Description | Example Usage |
 | :--- | :--- | :--- | :--- |
-| `make` | `mak` | Membuat folder atau file (Dual-mode) | `run make folder catatan` / `run mak` |
-| `open` | `opn` | Membuka aplikasi macOS via `open -a` | `run open Safari` / `run opn Code` |
-| `copy` | `cpy` | Menyalin file atau folder | `run copy file.txt backup.txt` |
-| `move` | `mov` | Memindahkan atau mengubah nama file/folder | `run move lama.txt baru.txt` |
-| `del` | `dlt` | Menghapus file atau folder secara aman | `run del temp/` |
-| `clear` | `clr` | Membersihkan layar terminal | `run clr` |
+| `make` | `mak` | Create a folder or empty file (dual-mode) | `run make folder notes` / `run mak` |
+| `open` | `opn` | Open a macOS application via `open -a` | `run open Safari` / `run opn Code` |
+| `copy` | `cpy` | Copy files or directories | `run copy file.txt backup.txt` |
+| `move` | `mov` | Move or rename files and directories | `run move old.txt new.txt` |
+| `del` | `dlt` | Safely delete files or directories | `run del temp/` |
+| `clear` | `clr` | Clear the terminal screen | `run clr` |
 
-## Konsep Dual-Mode
+## Dual-Mode Interaction
 
-* **Mode Langsung (Direct Mode)**: Jika argumen diberikan lengkap (misal: `run make folder project-x` atau `run cpy file.txt backup.txt`), aplikasi langsung mengeksekusi operasi tanpa interupsi.
-* **Mode Interaktif (Interactive Mode)**: Jika hanya mengetikkan perintah utama atau aliasnya (misal: `run make` atau `run opn`), antarmuka interaktif terminal (`dialoguer`) akan meminta input atau pilihan langkah berikutnya.
+* **Direct Mode**: When you provide complete arguments (such as `run make folder project-x` or `run cpy notes.txt backup.txt`), the command executes immediately without prompt pauses.
+* **Interactive Mode**: When you type only the command or its alias (such as `run make` or `run opn`), an interactive prompt guides you through options and required inputs.
 
-## Keamanan dan Penanganan Error
+## Safety and Error Handling
 
-* **Konfirmasi Penghapusan Aman**: Perintah `del` / `dlt` selalu memunculkan dialog konfirmasi sebelum menghapus file atau direktori secara permanen.
-* **Pesan Kesalahan Jelas**: Error sistem berkas dan proses diterjemahkan ke pesan yang mudah dipahami pengguna tanpa menampilkan raw stack trace.
+* **Safe Deletion**: The `del` / `dlt` command always requires confirmation before deleting files or directories.
+* **Clear Error Messages**: Underlying operating system and process failures display clean, readable status notes rather than raw stack traces.
 
-## Instalasi dan Kompilasi
+## Installation
 
-### Prasyarat
-* Rust (versi 1.80 atau yang lebih baru disarankan)
+### Prerequisites
+* Rust toolchain (1.80 or newer recommended)
 * macOS
 
-### Build Biner
+### Build Release Binary
 ```bash
 cargo build --release
 ```
 
-Biner yang dihasilkan tersedia di `target/release/run`.
+The compiled executable is placed at `target/release/run`.
 
-### Install ke Sistem Lokal
-Untuk dapat menjalankan perintah `run` dari direktori mana pun di terminal:
+### Install to System PATH
+To run `run` globally from any directory:
 ```bash
 cargo install --path .
 ```
 
-Pastikan direktori `~/.cargo/bin` sudah terdaftar di variabel lingkungan `PATH` Anda.
+Verify the installation:
+```bash
+run --help
+```
 
-## Menjalankan Pengujian
+## Running Tests
 
 ```bash
 cargo test
 ```
 
-## Lisensi
+## License
 
-Proyek ini dilisensikan di bawah lisensi MIT. Lihat file [LICENSE](LICENSE) untuk informasi lengkap.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.

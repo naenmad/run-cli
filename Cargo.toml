@@ -2,6 +2,10 @@
 name = "run"
 version = "0.1.0"
 edition = "2024"
+description = "Productivity CLI utility for macOS with dual-mode interaction"
+repository = "https://github.com/naenmad/run-cli"
+license = "MIT"
+readme = "README.md"
 
 [dependencies]
 anyhow = "1.0"
