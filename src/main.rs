@@ -11,6 +11,8 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, FuzzySelect, Input, Select};
 
 mod commands;
+mod completion;
+mod config;
 mod ui;
 
 #[derive(Parser)]
@@ -310,6 +312,36 @@ enum Commands {
         sequential: bool,
     },
 
+    /// Manage Docker and OrbStack containers, inspect status, view logs, start or stop
+    #[command(name = "docker", alias = "dck")]
+    Docker,
+
+    /// Audit local .env files against .env.example, find missing secrets, or generate templates
+    #[command(name = "secret", alias = "sec", alias = "dotenv")]
+    Secret {
+        /// Automatically generate .env.example template from .env
+        #[arg(long)]
+        fix: bool,
+    },
+
+    /// Developer quick scratchpad & snippet clipboard manager
+    #[command(name = "memo", alias = "mem", alias = "clip")]
+    Memo {
+        /// Subaction: add, copy, rm, clear, or view
+        action: Option<String>,
+        /// Snippet title (for add, copy, or rm)
+        arg1: Option<String>,
+        /// Snippet content (for add)
+        arg2: Option<String>,
+    },
+
+    /// Generate native shell auto-completion script (zsh, bash, fish)
+    #[command(name = "completion", alias = "cmp")]
+    Completion {
+        /// Target shell (zsh, bash, fish, powershell, elvish)
+        shell: String,
+    },
+
     /// Display complete command reference and usage tutorial
     #[command(name = "help", alias = "doc", alias = "guide")]
     Help {
@@ -561,6 +593,30 @@ const ALL_COMMANDS: &[CommandInfo] = &[
         description: "Measure internet download, upload and latency",
     },
     CommandInfo {
+        name: "docker",
+        alias_3: "dck",
+        aliases: &["dck"],
+        description: "Inspect & manage Docker/OrbStack containers & logs",
+    },
+    CommandInfo {
+        name: "secret",
+        alias_3: "sec",
+        aliases: &["sec", "dotenv"],
+        description: "Audit & sync .env and .env.example environment variables",
+    },
+    CommandInfo {
+        name: "memo",
+        alias_3: "mem",
+        aliases: &["mem", "clip"],
+        description: "Quick developer scratchpad & snippet clipboard manager",
+    },
+    CommandInfo {
+        name: "completion",
+        alias_3: "cmp",
+        aliases: &["cmp"],
+        description: "Generate native shell tab-completion (zsh, bash, fish)",
+    },
+    CommandInfo {
         name: "help",
         alias_3: "doc",
         aliases: &["doc", "guide"],
@@ -768,11 +824,11 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
     ui::render_breadcrumbs(&["run", "Launcher Dashboard"]);
 
     let categories = [
-        "🛠️   Developer & Workspace  (project, dev, build, test, clean, sync...)",
-        "📂  Filesystem & Navigation (go, list, make, remove, copy, move...)",
+        "🛠️   Developer & Workspace  (project, dev, build, docker, secret...)",
+        "📂  Filesystem & Navigation (go, list, make, memo, read, find...)",
         "⚙️   System & Monitoring     (process, kill, disk, whoami, time...)",
-        "🌐  Network & Archive       (port, fetch, ping, pack, unpack...)",
-        "🔍  Search All 36 Commands... (search as you type)",
+        "🌐  Network & Utilities     (port, fetch, speedtest, completion...)",
+        "🔍  Search All 40 Commands... (search as you type)",
     ];
     let cancel_btn = cancel_option();
     let mut dashboard_options: Vec<String> = categories.iter().map(|s| s.to_string()).collect();
@@ -796,7 +852,8 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .copied()
             .filter(|c| {
                 [
-                    "project", "dev", "build", "test", "clean", "sync", "network", "share", "bench",
+                    "project", "dev", "build", "test", "clean", "sync", "network", "share",
+                    "bench", "docker", "secret",
                 ]
                 .contains(&c.name)
             })
@@ -807,7 +864,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .filter(|c| {
                 [
                     "go", "path", "list", "make", "remove", "copy", "move", "read", "find",
-                    "permit",
+                    "permit", "memo",
                 ]
                 .contains(&c.name)
             })
@@ -825,7 +882,18 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
         3 => ALL_COMMANDS
             .iter()
             .copied()
-            .filter(|c| ["port", "fetch", "ping", "pack", "unpack", "speedtest"].contains(&c.name))
+            .filter(|c| {
+                [
+                    "port",
+                    "fetch",
+                    "ping",
+                    "pack",
+                    "unpack",
+                    "speedtest",
+                    "completion",
+                ]
+                .contains(&c.name)
+            })
             .collect(),
         4 => ALL_COMMANDS.to_vec(),
         _ => return Ok(()),
@@ -929,6 +997,12 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
         Commands::Share { port, path } => commands::handle_share(theme, port, path),
         Commands::Bench { command } => commands::handle_bench(theme, &command),
         Commands::Speedtest { sequential } => commands::handle_speedtest(theme, sequential),
+        Commands::Docker => commands::handle_docker(theme),
+        Commands::Secret { fix } => commands::handle_secret(theme, fix),
+        Commands::Memo { action, arg1, arg2 } => {
+            commands::handle_memo(theme, action.as_deref(), arg1.as_deref(), arg2.as_deref())
+        }
+        Commands::Completion { shell } => completion::generate_completion(&shell),
         Commands::Init => handle_init(),
         Commands::Help { command } => handle_help(command.as_deref()),
     }
@@ -951,7 +1025,10 @@ fn run_app() -> Result<()> {
         return Ok(());
     };
 
-    let cli = Cli::try_parse_from(&final_args)?;
+    let cli = match Cli::try_parse_from(&final_args) {
+        Ok(c) => c,
+        Err(err) => err.exit(),
+    };
     match cli.command {
         Some(command) => dispatch_command(&theme, command),
         None => {
@@ -1834,7 +1911,12 @@ fn handle_init() -> Result<()> {
     else
         command run "$@"
     fi
-}}"#
+}}
+if [ -n "$ZSH_VERSION" ]; then
+    source <(command run completion zsh 2>/dev/null)
+elif [ -n "$BASH_VERSION" ]; then
+    source <(command run completion bash 2>/dev/null)
+fi"#
     );
     Ok(())
 }
@@ -1953,6 +2035,38 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
 
     let canonical = target_path.canonicalize().unwrap_or(target_path);
 
+    let is_shell_resolve = std::env::var("RUN_SHELL_RESOLVE")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+
+    let cfg = config::load_config();
+    if let Some(ref ide) = cfg.default_ide {
+        let ide_clean = ide.trim().to_lowercase();
+        if ide_clean != "ask" && !ide_clean.is_empty() {
+            match ide_clean.as_str() {
+                "antigravity" | "agy" => return open_in_antigravity(&canonical, is_shell_resolve),
+                "cursor" => return open_in_cursor(&canonical, is_shell_resolve),
+                "vscode" | "code" => return open_in_vscode(&canonical, is_shell_resolve),
+                "xcode" => return open_in_xcode(&canonical, is_shell_resolve),
+                "terminal" | "none" => {
+                    if is_shell_resolve {
+                        println!("{}", canonical.display());
+                    } else {
+                        println!(
+                            "{}",
+                            format!("Target directory: {}", canonical.display()).green()
+                        );
+                        eprintln!(
+                            "Notice: Run 'source ~/.zshrc' in this terminal tab to activate in-place directory switching."
+                        );
+                    }
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
+    }
+
     let cancel_btn = cancel_option();
     let ide_options = [
         "Visual Studio Code (code)",
@@ -1977,10 +2091,6 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
         .items(&ide_options)
         .default(0)
         .interact_on(&term)?;
-
-    let is_shell_resolve = std::env::var("RUN_SHELL_RESOLVE")
-        .map(|v| v == "1")
-        .unwrap_or(false);
 
     match ide_selection {
         0 => open_in_vscode(&canonical, is_shell_resolve)?,
@@ -2164,13 +2274,27 @@ fn scan_projects(home_dir: &Path, current_dir: &Path) -> Vec<PathBuf> {
     let mut projects = Vec::new();
     let mut visited = HashSet::new();
 
-    let candidate_hubs = [
+    let cfg = config::load_config();
+    let mut candidate_hubs = vec![
         home_dir.join("Developer"),
         home_dir.join("Projects"),
         home_dir.join("Code"),
         home_dir.join("Documents"),
         home_dir.join("Desktop"),
     ];
+
+    if let Some(custom) = cfg.custom_hubs {
+        for hub in custom {
+            let p = if hub.to_string_lossy().starts_with("~/") {
+                home_dir.join(&hub.to_string_lossy()[2..])
+            } else {
+                hub
+            };
+            if !candidate_hubs.contains(&p) {
+                candidate_hubs.push(p);
+            }
+        }
+    }
 
     let ignored_names = [
         "Library",
@@ -2458,6 +2582,16 @@ fn print_main_help() {
         "Interactive 1-step Git pull, commit, and push",
     );
     print_cmd_summary(
+        "docker",
+        "dck",
+        "Inspect & manage Docker/OrbStack containers & logs",
+    );
+    print_cmd_summary(
+        "secret",
+        "sec (dotenv)",
+        "Audit & sync .env and .env.example environment variables",
+    );
+    print_cmd_summary(
         "network",
         "net (ip)",
         "Inspect local LAN and public IP with quick copy",
@@ -2496,6 +2630,11 @@ fn print_main_help() {
     print_cmd_summary("read", "red (cat)", "Inspect file contents directly");
     print_cmd_summary("find", "fnd (grep)", "Search pattern or text in files");
     print_cmd_summary("permit", "prm (chmod)", "Change permissions with presets");
+    print_cmd_summary(
+        "memo",
+        "mem (clip)",
+        "Quick developer scratchpad & snippet clipboard manager",
+    );
     println!();
     println!("{}", electric_blue("SYSTEM & PROCESS:").bold());
     print_cmd_summary(
@@ -2547,6 +2686,11 @@ fn print_main_help() {
     print_cmd_summary("open", "opn", "Launch macOS applications (open -a)");
     print_cmd_summary("clear", "clr", "Clear terminal screen");
     print_cmd_summary("init", "ini", "Generate shell integration wrapper");
+    print_cmd_summary(
+        "completion",
+        "cmp",
+        "Generate native shell completion (zsh, bash, fish)",
+    );
     print_cmd_summary("help", "doc (guide)", "Display reference or detailed guide");
     println!();
     println!("{}", electric_blue("CANCELLATION:").bold());
@@ -2926,6 +3070,55 @@ fn print_command_detail(cmd: &str) {
             println!("  run speedtest             Run full parallel download & upload speed test");
             println!("  run spd                   Alias");
             println!("  run spd -s                Run sequentially instead of parallel");
+        }
+        "docker" | "dck" => {
+            println!("{} docker (alias: dck)", electric_blue("COMMAND:").bold());
+            println!("Inspect & manage Docker and OrbStack containers, logs, and processes.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run docker                Open interactive container manager");
+            println!("  run dck                   Alias");
+        }
+        "secret" | "sec" | "dotenv" => {
+            println!(
+                "{} secret (alias: sec, dotenv)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Audit local .env variables against .env.example and generate templates.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!(
+                "  run secret                Audit missing variables between .env & .env.example"
+            );
+            println!("  run sec                   Alias");
+            println!(
+                "  run sec --fix             Generate sanitized .env.example from active .env"
+            );
+        }
+        "memo" | "mem" | "clip" => {
+            println!(
+                "{} memo (alias: mem, clip)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Developer quick scratchpad and snippet clipboard manager.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run memo                  Interactive snippet browser and picker");
+            println!("  run mem add <title> <val> Save a quick snippet or command");
+            println!("  run mem copy <title>      Copy snippet to macOS system clipboard");
+            println!("  run mem rm <title>        Delete snippet from storage");
+            println!("  run mem clear             Clear all snippets");
+        }
+        "completion" | "cmp" => {
+            println!(
+                "{} completion (alias: cmp)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Generate native shell auto-completion script for zsh, bash, or fish.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run completion zsh        Print zsh completion script");
+            println!("  run completion bash       Print bash completion script");
+            println!("  run completion fish       Print fish completion script");
+            println!("  run cmp zsh               Alias\n");
+            println!("{}", electric_blue("SETUP:").bold());
+            println!("  eval \"$(run init)\" automatically loads completion into your shell!");
         }
         "open" | "opn" => {
             println!("{} open (alias: opn)", electric_blue("COMMAND:").bold());
@@ -3487,6 +3680,84 @@ mod tests {
             Ok(Cli {
                 command: Some(Commands::Speedtest { sequential: false })
             })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "docker"]),
+            Ok(Cli {
+                command: Some(Commands::Docker)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "dck"]),
+            Ok(Cli {
+                command: Some(Commands::Docker)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "secret"]),
+            Ok(Cli {
+                command: Some(Commands::Secret { fix: false })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "sec", "--fix"]),
+            Ok(Cli {
+                command: Some(Commands::Secret { fix: true })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "dotenv"]),
+            Ok(Cli {
+                command: Some(Commands::Secret { fix: false })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "memo"]),
+            Ok(Cli {
+                command: Some(Commands::Memo {
+                    action: None,
+                    arg1: None,
+                    arg2: None
+                })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "mem", "add", "mykey", "val"]),
+            Ok(Cli {
+                command: Some(Commands::Memo { ref action, ref arg1, ref arg2 })
+            }) if action.as_deref() == Some("add") && arg1.as_deref() == Some("mykey") && arg2.as_deref() == Some("val")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "clip"]),
+            Ok(Cli {
+                command: Some(Commands::Memo {
+                    action: None,
+                    arg1: None,
+                    arg2: None
+                })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "completion", "zsh"]),
+            Ok(Cli {
+                command: Some(Commands::Completion { ref shell })
+            }) if shell == "zsh"
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "cmp", "fish"]),
+            Ok(Cli {
+                command: Some(Commands::Completion { ref shell })
+            }) if shell == "fish"
         ));
     }
 

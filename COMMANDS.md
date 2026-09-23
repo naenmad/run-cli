@@ -4,18 +4,20 @@
 
 ---
 
-## Command Reference Matrix (37 Commands)
+## Command Reference Matrix (40 Commands)
 
 ### 🛠️ Developer & Workspace Suite
 
 | Semantic Command | 3-Letter Alias | Additional Aliases | Purpose |
 | :--- | :--- | :--- | :--- |
-| `project` | `prj` | - | Scan workspace hubs and launch in VS Code, Cursor, Antigravity, Xcode, or terminal |
+| `project` | `prj` | - | Scan workspace hubs and launch in Antigravity, VS Code, Cursor, Xcode, or terminal |
 | `dev` | `dev` | `develop` | Auto-detect stack (Rust, Node, Flutter, Go) and start development server |
 | `build` | `bld` | - | Compile active project in release mode |
 | `test` | `tst` | - | Polyglot automated test runner (`cargo test`, `npm test`, `pytest`, `flutter test`, `go test`) |
 | `clean` | `cln` | - | Scan and clean disposable build artifacts (`target/`, `node_modules/`, `.next/`, `__pycache__/`, `DerivedData/`) with size confirmation |
 | `sync` | `snc` | `git` | 1-step Git pull, status review, commit message prompt, and push |
+| `docker` | `dck` | - | Inspect and manage Docker/OrbStack containers, view logs, start or stop |
+| `secret` | `sec` | `dotenv` | Audit local `.env` variables against `.env.example` and generate sanitized templates (`--fix`) |
 | `network` | `net` | `ip` | Inspect local LAN and public WAN IP addresses with interactive copy to clipboard |
 | `share` | `shr` | - | Instant local HTTP file server on local network (`run share -p 8080`) |
 | `bench` | `bnc` | - | Benchmark command execution duration with high-resolution microsecond timer |
@@ -34,6 +36,7 @@
 | `read` | `red` | `cat` | Inspect file contents directly |
 | `find` | `fnd` | `grep`, `search` | Search pattern or text across files recursively |
 | `permit` | `prm` | `chmod` | Change file permissions with presets (`755`, `644`, `+x`) |
+| `memo` | `mem` | `clip` | Developer scratchpad and snippet clipboard manager (`add`, `copy`, `rm`, `clear`) |
 
 ### ⚙️ System & Process Management
 
@@ -65,7 +68,8 @@
 | :--- | :--- | :--- | :--- |
 | `open` | `opn` | - | Launch macOS applications (via `open -a`) |
 | `clear` | `clr` | - | Clear terminal screen |
-| `init` | `ini` | - | Generate shell integration wrapper for `~/.zshrc` |
+| `init` | `ini` | - | Generate shell integration wrapper and auto-completion for `~/.zshrc` |
+| `completion` | `cmp` | - | Generate native shell completion scripts (`zsh`, `bash`, `fish`) |
 | `help` | `doc` | `guide` | Interactive terminal documentation and detailed guides |
 
 ---
@@ -216,4 +220,62 @@ run pck
 # Extract archive:
 run unpack backup.tar.gz
 run upk
+```
+
+### 5. Docker, Secret & Clipboard Memo
+
+```bash
+# Manage Docker / OrbStack containers interactively (inspect, start, stop, view logs):
+run docker
+run dck
+
+# Audit .env variables against .env.example:
+run secret
+run sec
+
+# Generate sanitized .env.example from current .env file:
+run secret --fix
+run sec --fix
+
+# Open interactive snippet / scratchpad manager:
+run memo
+run mem
+
+# Save a quick command or note:
+run mem add docker-stop "docker stop \$(docker ps -q)"
+
+# Copy snippet directly to macOS system clipboard:
+run mem copy docker-stop
+
+# Remove snippet:
+run mem rm docker-stop
+```
+
+### 6. Shell Auto-Completion
+
+```bash
+# Generate shell completion script:
+run completion zsh
+run completion bash
+run completion fish
+
+# Tip: eval "$(run init)" in ~/.zshrc automatically sources completions!
+```
+
+---
+
+## ⚙️ Configuration (`~/.config/run/config.toml`)
+
+`run` automatically creates a configuration template at `~/.config/run/config.toml` upon first run.
+
+```toml
+# Default editor to open projects directly without prompting:
+# Options: "antigravity", "cursor", "vscode", "xcode", "terminal", "ask" (default)
+default_ide = "antigravity"
+
+# Additional custom directory hubs to scan for projects in `run project`:
+custom_hubs = [
+    "~/Developer/Summit",
+    "~/Work/Projects"
+]
 ```

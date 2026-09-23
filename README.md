@@ -34,7 +34,14 @@ Standard Unix commands are cryptic and filled with archaic flags (`lsof -iTCP -s
 
 ## 🚀 Quick Install
 
-### Option 1: Install via Cargo (Recommended)
+### Option 1: Install via Homebrew (Recommended)
+
+```bash
+brew tap naenmad/tap
+brew install run
+```
+
+### Option 2: Install via Cargo
 
 If you have Rust installed:
 
@@ -42,7 +49,7 @@ If you have Rust installed:
 cargo install --git https://github.com/naenmad/run-cli
 ```
 
-### Option 2: Pre-compiled GitHub Release (macOS Apple Silicon & Intel)
+### Option 3: Pre-compiled GitHub Release (macOS Apple Silicon & Intel)
 
 Download and install the latest binary with a single terminal command:
 
@@ -56,7 +63,7 @@ curl -fsSL https://github.com/naenmad/run-cli/releases/latest/download/run-macos
 
 *(If `/usr/local/bin` requires root, use `sudo` or extract into `~/.local/bin`)*.
 
-### Option 3: Build from Source
+### Option 4: Build from Source
 
 ```bash
 git clone https://github.com/naenmad/run-cli.git
@@ -67,9 +74,9 @@ sudo cp target/release/run /usr/local/bin/
 
 ---
 
-## ⚙️ Shell Integration (In-Place `cd`)
+## ⚙️ Shell Integration & Auto-Completion
 
-Because a child process cannot alter its parent shell's working directory, `run` provides a lightweight shell wrapper so that commands like `run go <folder>` and `run project` seamlessly switch your active terminal directory:
+`run` includes automatic in-place directory switching (`run go`, `run project`) and native tab completion (`zsh`, `bash`, `fish`).
 
 Add this single line to your `~/.zshrc` (or `~/.bashrc`):
 
@@ -82,23 +89,43 @@ Then reload your shell:
 source ~/.zshrc
 ```
 
-Now `run go root`, `run go back`, or selecting a project with **"Switch Terminal Directory Only"** will change your terminal's directory instantly!
+Now `run go root`, `run go back`, or selecting a project with **"Switch Terminal Directory Only"** will change your terminal's directory instantly, and pressing **Tab** after `run ` will auto-complete all commands and flags!
+
+---
+
+## 🛠️ Configuration (`~/.config/run/config.toml`)
+
+`run` auto-creates a config file at `~/.config/run/config.toml`:
+
+```toml
+# Default editor to open projects directly without prompting:
+# Options: "antigravity", "cursor", "vscode", "xcode", "terminal", "ask" (default)
+default_ide = "antigravity"
+
+# Additional custom directory hubs to scan in `run project`:
+custom_hubs = [
+    "~/Developer/Summit",
+    "~/Work"
+]
+```
 
 ---
 
 ## 🎯 Command Cheatsheet
 
-`run` includes **37 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
+`run` includes **40 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
 
 ### 🛠️ Developer & Workspace Suite
 | Command | Alias | Purpose & Highlights |
 | :--- | :--- | :--- |
-| `project` | `prj` | Scan project directories & open in **VS Code**, **Cursor**, **Antigravity**, **Xcode**, or terminal |
+| `project` | `prj` | Scan project directories & open in **Antigravity**, **VS Code**, **Cursor**, **Xcode**, or terminal |
 | `dev` | `dev` | Auto-detects project stack (`cargo`, `npm`, `pnpm`, `flutter`, `go`) and starts dev server |
 | `build` | `bld` | Compiles active project in release mode |
 | `test` | `tst` | Polyglot automated test runner (`cargo test`, `npm test`, `pytest`, `flutter test`, `go test`) |
 | `clean` | `cln` | Scans and deletes disposable caches (`target/`, `node_modules/`, `.next/`, `__pycache__/`, `DerivedData/`) with size report & confirmation |
 | `sync` | `snc`, `git` | 1-step Git pull, status review, commit message prompt, and push |
+| `docker` | `dck` | Inspect and manage Docker/OrbStack containers, view logs, start or stop |
+| `secret` | `sec`, `dotenv` | Audit local `.env` against `.env.example` and generate sanitized templates (`--fix`) |
 | `network` | `net`, `ip` | Inspects local LAN (en0/en1) and public WAN IP with interactive clipboard copy |
 | `share` | `shr` | Instant local HTTP file server on LAN (`run share -p 8080`) |
 | `bench` | `bnc` | Microsecond-precision command execution benchmark timer |
@@ -116,6 +143,7 @@ Now `run go root`, `run go back`, or selecting a project with **"Switch Terminal
 | `read` | `red` | `cat` | Inspect file contents directly in terminal |
 | `find` | `fnd` | `grep`, `search` | Recursive pattern and text search across files |
 | `permit` | `prm` | `chmod` | Modify file permissions using human presets (`755`, `644`, `+x`) |
+| `memo` | `mem`, `clip` | - | Developer quick scratchpad & snippet clipboard manager |
 
 ### ⚙️ System & Process Management
 | Command | Alias | Unix Alias | Purpose |
@@ -144,7 +172,8 @@ Now `run go root`, `run go back`, or selecting a project with **"Switch Terminal
 | :--- | :--- | :--- |
 | `open` | `opn` | Launch macOS applications via native `open -a` |
 | `clear` | `clr` | Clear terminal screen |
-| `init` | `ini` | Output shell wrapper script for `~/.zshrc` |
+| `init` | `ini` | Output shell wrapper script and auto-completion for `~/.zshrc` |
+| `completion` | `cmp` | Generate native shell auto-completion (`zsh`, `bash`, `fish`) |
 | `help` | `doc`, `guide` | Interactive terminal documentation and detailed guides (`run help <cmd>`) |
 
 ---

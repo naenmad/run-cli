@@ -6,7 +6,8 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 use colored::Colorize;
 use dialoguer::theme::ColorfulTheme;
-use dialoguer::{Confirm, Input, Select};
+use dialoguer::{Confirm, FuzzySelect, Input, Select};
+use serde::{Deserialize, Serialize};
 
 use crate::ui;
 
@@ -1902,4 +1903,589 @@ fn responsiveness_rating(rpm: f64) -> String {
     } else {
         format!("Low ({:.0} RPM) 🔴", rpm)
     }
+}
+
+/// docker (alias: dck) - Interactive Docker container, image, and storage manager
+pub fn handle_docker(theme: &ColorfulTheme) -> Result<()> {
+    let has_docker = Command::new("which")
+        .arg("docker")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if !has_docker {
+        bail!("docker CLI is not installed or not in PATH");
+    }
+
+    // Check daemon connection
+    let daemon_check = Command::new("docker").args(["ps", "-q"]).output();
+    let daemon_ok = daemon_check.map(|o| o.status.success()).unwrap_or(false);
+
+    if !daemon_ok {
+        let rows = [
+            ("Status", "Docker Daemon Not Running 🔴".to_string()),
+            (
+                "Guidance",
+                "Please start OrbStack or Docker Desktop application".to_string(),
+            ),
+        ];
+        ui::print_card("🐳 DOCKER DAEMON STATUS", &rows);
+        return Ok(());
+    }
+
+    let cancel_btn = cancel_option();
+    let options = [
+        "📦  Containers   (list, inspect, restart, stop, follow logs)",
+        "🖼️   Images       (list local images and disk usage)",
+        "🧹  System Prune (clean stopped containers, dangling images & caches)",
+        "🚀  Compose Up   (run 'docker compose up -d')",
+        "🛑  Compose Down (run 'docker compose down')",
+        cancel_btn.as_str(),
+    ];
+
+    ui::print_key_hints();
+    let selection = Select::with_theme(theme)
+        .with_prompt("Select Docker action")
+        .items(&options)
+        .default(0)
+        .interact()?;
+
+    match selection {
+        0 => manage_containers(theme)?,
+        1 => {
+            println!("{}", electric_blue("Local Docker Images:").bold());
+            let status = Command::new("docker")
+                .args([
+                    "images",
+                    "--format",
+                    "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}",
+                ])
+                .status()?;
+            if !status.success() {
+                bail!("failed to list docker images");
+            }
+        }
+        2 => {
+            let confirm = Confirm::with_theme(theme)
+                .with_prompt("Prune all stopped containers, unused networks, and dangling images?")
+                .default(false)
+                .interact()?;
+            if confirm {
+                println!(
+                    "{}",
+                    electric_blue("Pruning unused Docker resources...").bold()
+                );
+                let status = Command::new("docker")
+                    .args(["system", "prune", "-f"])
+                    .status()?;
+                if status.success() {
+                    println!("{}", "Docker system pruned successfully! 🟢".green().bold());
+                }
+            } else {
+                println!("Cancelled.");
+            }
+        }
+        3 => {
+            println!(
+                "{}",
+                electric_blue("Starting Docker Compose services (detached)...").bold()
+            );
+            let status = Command::new("docker")
+                .args(["compose", "up", "-d"])
+                .status()?;
+            if !status.success() {
+                bail!("docker compose up failed");
+            }
+        }
+        4 => {
+            println!(
+                "{}",
+                electric_blue("Stopping Docker Compose services...").bold()
+            );
+            let status = Command::new("docker").args(["compose", "down"]).status()?;
+            if !status.success() {
+                bail!("docker compose down failed");
+            }
+        }
+        _ => {
+            println!("Cancelled.");
+        }
+    }
+
+    Ok(())
+}
+
+fn manage_containers(theme: &ColorfulTheme) -> Result<()> {
+    let output = Command::new("docker")
+        .args([
+            "ps",
+            "-a",
+            "--format",
+            "{{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Image}}",
+        ])
+        .output()
+        .context("failed to list containers")?;
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut containers = Vec::new();
+    for line in text.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() >= 4 {
+            containers.push((
+                parts[0].to_string(), // ID
+                parts[1].to_string(), // Name
+                parts[2].to_string(), // Status
+                parts[3].to_string(), // Image
+            ));
+        }
+    }
+
+    if containers.is_empty() {
+        println!(
+            "{}",
+            "No Docker containers found (running or stopped).".dimmed()
+        );
+        return Ok(());
+    }
+
+    let mut menu_items: Vec<String> = containers
+        .iter()
+        .map(|(id, name, status, _image)| {
+            let status_badge = if status.to_lowercase().starts_with("up") {
+                " 🟢 [UP] ".bold().bright_green().on_black()
+            } else {
+                " 🔴 [EXITED] ".bold().bright_red().on_black()
+            };
+            format!(
+                "{:<20} {} {:<12} ({})",
+                name.bold(),
+                status_badge,
+                id.dimmed(),
+                status
+            )
+        })
+        .collect();
+    menu_items.push(cancel_option());
+
+    ui::print_key_hints();
+    let selection = FuzzySelect::with_theme(theme)
+        .with_prompt("Select container to manage (type to filter)")
+        .items(&menu_items)
+        .default(0)
+        .interact()?;
+
+    if selection >= containers.len() {
+        println!("Cancelled.");
+        return Ok(());
+    }
+
+    let (cid, cname, _, _) = &containers[selection];
+
+    let cancel_btn = cancel_option();
+    let actions = [
+        "📜  Follow Live Logs (Ctrl+C to exit)",
+        "🔄  Restart Container",
+        "🛑  Stop Container",
+        "▶️   Start Container",
+        cancel_btn.as_str(),
+    ];
+
+    let action = Select::with_theme(theme)
+        .with_prompt(format!("Manage container '{cname}'"))
+        .items(&actions)
+        .default(0)
+        .interact()?;
+
+    match action {
+        0 => {
+            println!(
+                "{}",
+                electric_blue(&format!("Streaming logs for '{cname}' (Ctrl+C to exit)...")).bold()
+            );
+            let _ = Command::new("docker").args(["logs", "-f", cid]).status();
+        }
+        1 => {
+            println!(
+                "{}",
+                electric_blue(&format!("Restarting container '{cname}'...")).bold()
+            );
+            let status = Command::new("docker").args(["restart", cid]).status()?;
+            if status.success() {
+                println!(
+                    "{}",
+                    format!("Container '{cname}' restarted! 🟢").green().bold()
+                );
+            }
+        }
+        2 => {
+            println!(
+                "{}",
+                electric_blue(&format!("Stopping container '{cname}'...")).bold()
+            );
+            let status = Command::new("docker").args(["stop", cid]).status()?;
+            if status.success() {
+                println!(
+                    "{}",
+                    format!("Container '{cname}' stopped! 🛑").yellow().bold()
+                );
+            }
+        }
+        3 => {
+            println!(
+                "{}",
+                electric_blue(&format!("Starting container '{cname}'...")).bold()
+            );
+            let status = Command::new("docker").args(["start", cid]).status()?;
+            if status.success() {
+                println!(
+                    "{}",
+                    format!("Container '{cname}' started! 🟢").green().bold()
+                );
+            }
+        }
+        _ => {
+            println!("Cancelled.");
+        }
+    }
+
+    Ok(())
+}
+
+/// secret (alias: sec, dotenv) - Smart .env validator, diff checker and secure inspector
+pub fn handle_secret(theme: &ColorfulTheme, fix: bool) -> Result<()> {
+    let current_dir = std::env::current_dir().context("failed to get current directory")?;
+
+    let env_file = current_dir.join(".env");
+    let example_file = [
+        current_dir.join(".env.example"),
+        current_dir.join(".env.sample"),
+        current_dir.join(".env.template"),
+    ]
+    .into_iter()
+    .find(|p| p.exists());
+
+    if !env_file.exists() && example_file.is_none() {
+        println!(
+            "{}",
+            "No .env or .env.example files found in current directory.".dimmed()
+        );
+        return Ok(());
+    }
+
+    fn parse_env_file(path: &std::path::Path) -> Vec<(String, String)> {
+        let mut vars = Vec::new();
+        if let Ok(content) = fs::read_to_string(path) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.starts_with('#') {
+                    continue;
+                }
+                if let Some((k, v)) = trimmed.split_once('=') {
+                    vars.push((k.trim().to_string(), v.trim().to_string()));
+                }
+            }
+        }
+        vars
+    }
+
+    let env_vars = if env_file.exists() {
+        parse_env_file(&env_file)
+    } else {
+        Vec::new()
+    };
+
+    let example_vars = example_file
+        .as_ref()
+        .map(|p| parse_env_file(p))
+        .unwrap_or_default();
+
+    let env_keys: std::collections::HashSet<String> =
+        env_vars.iter().map(|(k, _)| k.clone()).collect();
+    let example_keys: std::collections::HashSet<String> =
+        example_vars.iter().map(|(k, _)| k.clone()).collect();
+
+    let missing_keys: Vec<String> = example_keys
+        .iter()
+        .filter(|k| !env_keys.contains(*k))
+        .cloned()
+        .collect();
+
+    let status_val = if missing_keys.is_empty() {
+        "All required variables defined 🟢"
+            .green()
+            .bold()
+            .to_string()
+    } else {
+        format!("Missing {} required variable(s) 🔴", missing_keys.len())
+            .red()
+            .bold()
+            .to_string()
+    };
+
+    let rows = [
+        (
+            ".env Path",
+            if env_file.exists() {
+                ".env (present)".green().bold().to_string()
+            } else {
+                ".env (missing)".red().bold().to_string()
+            },
+        ),
+        (
+            ".env.example",
+            if example_file.is_some() {
+                "Present 🟢".to_string()
+            } else {
+                "None found".dimmed().to_string()
+            },
+        ),
+        ("Total Defined", format!("{} variables", env_vars.len())),
+        ("Validation", status_val),
+    ];
+    ui::print_card("🔐 ENVIRONMENT SECRET VALIDATOR", &rows);
+
+    if !missing_keys.is_empty() {
+        println!("{}", "MISSING REQUIRED VARIABLES:".bold().red());
+        for k in &missing_keys {
+            println!(
+                "  {} {}",
+                "🔴 [MISSING]".bold().bright_red().on_black(),
+                k.bold()
+            );
+        }
+        println!();
+
+        if fix
+            || Confirm::with_theme(theme)
+                .with_prompt("Append missing variables from .env.example into .env?")
+                .default(true)
+                .interact()?
+        {
+            let mut to_append = String::new();
+            to_append.push_str("\n# Appended by 'run secret'\n");
+            for k in &missing_keys {
+                let default_val = example_vars
+                    .iter()
+                    .find(|(ek, _)| ek == k)
+                    .map(|(_, v)| v.as_str())
+                    .unwrap_or("");
+                to_append.push_str(&format!("{k}={default_val}\n"));
+            }
+            let mut file = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&env_file)
+                .context("failed to update .env file")?;
+            file.write_all(to_append.as_bytes())?;
+            println!(
+                "{}",
+                "Appended missing variables to .env successfully! 🟢"
+                    .green()
+                    .bold()
+            );
+        }
+    }
+
+    if !env_vars.is_empty() {
+        println!("{}", "DEFINED VARIABLES (SAFELY MASKED):".bold());
+        for (k, v) in env_vars.iter().take(20) {
+            let masked = if v.len() > 6 {
+                format!("{}****{}", &v[..2], &v[v.len() - 2..])
+            } else {
+                "******".to_string()
+            };
+            println!("  {: <24} = {}", k.bold(), masked.dimmed());
+        }
+        if env_vars.len() > 20 {
+            println!("  ... and {} more variables", env_vars.len() - 20);
+        }
+        println!();
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Snippet {
+    pub title: String,
+    pub command: String,
+}
+
+fn snippets_file_path() -> Result<PathBuf> {
+    let dir = crate::config::config_dir()?;
+    fs::create_dir_all(&dir)?;
+    Ok(dir.join("snippets.json"))
+}
+
+fn load_snippets() -> Vec<Snippet> {
+    let path = match snippets_file_path() {
+        Ok(p) => p,
+        Err(_) => return default_snippets(),
+    };
+
+    if !path.exists() {
+        let defaults = default_snippets();
+        if let Ok(json) = serde_json::to_string_pretty(&defaults) {
+            let _ = fs::write(&path, json);
+        }
+        return defaults;
+    }
+
+    fs::read_to_string(&path)
+        .ok()
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or_else(default_snippets)
+}
+
+fn save_snippets(snippets: &[Snippet]) -> Result<()> {
+    let path = snippets_file_path()?;
+    let json = serde_json::to_string_pretty(snippets)?;
+    fs::write(path, json)?;
+    Ok(())
+}
+
+fn default_snippets() -> Vec<Snippet> {
+    vec![
+        Snippet {
+            title: "Git undo last commit (keep changes staged)".to_string(),
+            command: "git reset --soft HEAD~1".to_string(),
+        },
+        Snippet {
+            title: "Docker stop all running containers".to_string(),
+            command: "docker stop $(docker ps -a -q)".to_string(),
+        },
+        Snippet {
+            title: "FFmpeg convert video to animated GIF".to_string(),
+            command: "ffmpeg -i input.mp4 -vf \"fps=10,scale=640:-1:flags=lanczos\" output.gif"
+                .to_string(),
+        },
+        Snippet {
+            title: "Find process listening on specific port".to_string(),
+            command: "lsof -iTCP -sTCP:LISTEN -P".to_string(),
+        },
+        Snippet {
+            title: "Tar create compressed archive".to_string(),
+            command: "tar -czvf archive.tar.gz folder/".to_string(),
+        },
+    ]
+}
+
+/// memo (alias: mem, clip) - Developer quick command snippet bookmark vault
+pub fn handle_memo(
+    theme: &ColorfulTheme,
+    action: Option<&str>,
+    arg1: Option<&str>,
+    arg2: Option<&str>,
+) -> Result<()> {
+    let mut snippets = load_snippets();
+
+    match action.map(|a| a.to_lowercase()).as_deref() {
+        Some("add") => {
+            let title = match arg1 {
+                Some(t) => t.to_string(),
+                None => {
+                    let input: String = Input::with_theme(theme)
+                        .with_prompt("Snippet title (leave blank to cancel)")
+                        .allow_empty(true)
+                        .interact_text()?;
+                    let trimmed = input.trim().to_string();
+                    if trimmed.is_empty() {
+                        println!("Cancelled.");
+                        return Ok(());
+                    }
+                    trimmed
+                }
+            };
+            let command = match arg2 {
+                Some(c) => c.to_string(),
+                None => {
+                    let input: String = Input::with_theme(theme)
+                        .with_prompt("Snippet command (leave blank to cancel)")
+                        .allow_empty(true)
+                        .interact_text()?;
+                    let trimmed = input.trim().to_string();
+                    if trimmed.is_empty() {
+                        println!("Cancelled.");
+                        return Ok(());
+                    }
+                    trimmed
+                }
+            };
+            snippets.push(Snippet {
+                title: title.clone(),
+                command: command.clone(),
+            });
+            save_snippets(&snippets)?;
+            println!("{}", format!("Added snippet '{title}'! 🟢").green().bold());
+        }
+        Some("remove") | Some("rm") | Some("del") => {
+            if snippets.is_empty() {
+                println!("{}", "No snippets available to remove.".dimmed());
+                return Ok(());
+            }
+            let mut items: Vec<String> = snippets
+                .iter()
+                .map(|s| format!("{:<36} {}", s.title.bold(), s.command.dimmed()))
+                .collect();
+            items.push(cancel_option());
+
+            let selection = Select::with_theme(theme)
+                .with_prompt("Select snippet to remove")
+                .items(&items)
+                .default(0)
+                .interact()?;
+
+            if selection >= snippets.len() {
+                println!("Cancelled.");
+                return Ok(());
+            }
+
+            let removed = snippets.remove(selection);
+            save_snippets(&snippets)?;
+            println!(
+                "{}",
+                format!("Removed snippet '{}' 🗑️", removed.title)
+                    .yellow()
+                    .bold()
+            );
+        }
+        _ => {
+            if snippets.is_empty() {
+                println!(
+                    "{}",
+                    "Snippet vault is empty. Add one with 'run memo add'!".dimmed()
+                );
+                return Ok(());
+            }
+
+            let mut items: Vec<String> = snippets
+                .iter()
+                .map(|s| format!("{:<36} {}", s.title.bold(), s.command.dimmed()))
+                .collect();
+            items.push(cancel_option());
+
+            ui::print_key_hints();
+            let selection = FuzzySelect::with_theme(theme)
+                .with_prompt("Select snippet to copy to clipboard (type to filter)")
+                .items(&items)
+                .default(0)
+                .interact()?;
+
+            if selection >= snippets.len() {
+                println!("Cancelled.");
+                return Ok(());
+            }
+
+            let selected = &snippets[selection];
+            copy_to_clipboard(&selected.command)?;
+            println!(
+                "{}",
+                format!("Copied to clipboard: '{}' 📋", selected.command)
+                    .green()
+                    .bold()
+            );
+        }
+    }
+
+    Ok(())
 }
