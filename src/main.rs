@@ -1166,7 +1166,7 @@ fn handle_dev() -> Result<()> {
     println!(
         "{}",
         format!("Starting development server ({label})...")
-            .cyan()
+            .truecolor(0, 162, 255)
             .bold()
     );
 
@@ -1214,7 +1214,9 @@ fn handle_build() -> Result<()> {
 
     println!(
         "{}",
-        format!("Building project ({label})...").cyan().bold()
+        format!("Building project ({label})...")
+            .truecolor(0, 162, 255)
+            .bold()
     );
 
     let status = Command::new(cmd)
@@ -1231,42 +1233,206 @@ fn handle_build() -> Result<()> {
     Ok(())
 }
 
-const COMMANDS_DOC: &str = include_str!("../COMMANDS.md");
+fn electric_blue(text: &str) -> colored::ColoredString {
+    text.truecolor(0, 162, 255)
+}
 
-/// Displays the complete command reference or details for a requested command.
+/// Displays beautifully formatted terminal help reference and command details.
 fn handle_help(target_command: Option<&str>) -> Result<()> {
     match target_command {
-        None => {
-            println!("{COMMANDS_DOC}");
-        }
-        Some(cmd) => {
-            let cmd_lower = cmd.to_lowercase();
-            let mut matched_section = None;
-
-            for section in COMMANDS_DOC.split("\n---") {
-                let trimmed = section.trim();
-                for line in trimmed.lines() {
-                    let line_lower = line.to_lowercase();
-                    if line.starts_with('#') && line_lower.contains(&cmd_lower) {
-                        matched_section = Some(trimmed);
-                        break;
-                    }
-                }
-                if matched_section.is_some() {
-                    break;
-                }
-            }
-
-            match matched_section {
-                Some(section) => println!("\n{section}\n"),
-                None => {
-                    println!("No specific reference found for '{cmd}'. Displaying full guide:\n");
-                    println!("{COMMANDS_DOC}");
-                }
-            }
-        }
+        None => print_main_help(),
+        Some(cmd) => print_command_detail(cmd.trim()),
     }
     Ok(())
+}
+
+fn print_main_help() {
+    println!();
+    println!(
+        "{} {}",
+        "run".bold().white(),
+        electric_blue("Productivity CLI utility for macOS").dimmed()
+    );
+    println!();
+    println!("{}", electric_blue("USAGE:").bold());
+    println!("  run <command> [arguments]");
+    println!("  run <alias>   [arguments]");
+    println!();
+    println!("{}", electric_blue("COMMANDS:").bold());
+    print_cmd_summary("make", "mak", "Create directory or empty file");
+    print_cmd_summary("open", "opn", "Launch macOS application (open -a)");
+    print_cmd_summary("copy", "cpy", "Copy file or directory tree recursively");
+    print_cmd_summary("move", "mov", "Move or rename file or directory");
+    print_cmd_summary("del", "dlt", "Safely delete file or directory tree");
+    print_cmd_summary("clear", "clr", "Clear terminal screen");
+    print_cmd_summary("go", "jmp, nav", "Smart directory navigation");
+    print_cmd_summary("project", "prj", "Scan projects & open in IDE or terminal");
+    print_cmd_summary("dev", "dev", "Run active project development server");
+    print_cmd_summary("build", "bld", "Build or compile active project");
+    print_cmd_summary("init", "ini", "Generate shell integration wrapper");
+    print_cmd_summary("help", "guide, doc", "Display reference or detailed guide");
+    println!();
+    println!("{}", electric_blue("CANCELLATION:").bold());
+    println!("  - Selection menus always provide 'Cancel' as the last option.");
+    println!("  - Text input prompts cancel immediately when left blank.");
+    println!("  - Deletion confirmations default to 'N' (Cancel).");
+    println!();
+    println!("{}", electric_blue("EXAMPLES:").bold());
+    println!("  run mak folder src/components");
+    println!("  run opn Safari");
+    println!("  run jmp root");
+    println!("  run prj .");
+    println!("  run dev");
+    println!("  run bld");
+    println!();
+    println!(
+        "{}",
+        electric_blue("Run 'run help <command>' (e.g. 'run help project') for detailed guide.").dimmed()
+    );
+    println!();
+}
+
+fn print_cmd_summary(cmd: &str, alias: &str, desc: &str) {
+    let name_col = if alias.is_empty() || alias == cmd {
+        cmd.to_string()
+    } else {
+        format!("{cmd}, {alias}")
+    };
+    println!("  {: <20} {}", name_col.bold(), desc);
+}
+
+fn print_command_detail(cmd: &str) {
+    let cmd_lower = cmd.to_lowercase();
+    println!();
+
+    match cmd_lower.as_str() {
+        "make" | "mak" => {
+            println!("{} make (alias: mak)", electric_blue("COMMAND:").bold());
+            println!("Create directories or empty files directly or interactively.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run make folder <path>    Create folder and required parents");
+            println!("  run make file <path>      Create empty file with parent directories");
+            println!("  run mak                   Interactive type selection and path prompt\n");
+            println!("{}", electric_blue("EXAMPLES:").bold());
+            println!("  run mak folder src/routes");
+            println!("  run mak file src/routes/index.ts");
+        }
+        "open" | "opn" => {
+            println!("{} open (alias: opn)", electric_blue("COMMAND:").bold());
+            println!("Launch macOS desktop applications via native open -a.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run open <app_name>       Open target application");
+            println!("  run opn                   Prompt for application name interactively\n");
+            println!("{}", electric_blue("EXAMPLES:").bold());
+            println!("  run opn Safari");
+            println!("  run opn \"Visual Studio Code\"");
+        }
+        "copy" | "cpy" => {
+            println!("{} copy (alias: cpy)", electric_blue("COMMAND:").bold());
+            println!("Copy single files or recursively copy directory trees.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run copy <src> <dst>      Copy source to destination");
+            println!("  run cpy                   Prompt for source and destination\n");
+            println!("{}", electric_blue("EXAMPLES:").bold());
+            println!("  run cpy document.pdf backup.pdf");
+            println!("  run cpy src/ backup_src/");
+        }
+        "move" | "mov" => {
+            println!("{} move (alias: mov)", electric_blue("COMMAND:").bold());
+            println!("Move or rename files and directories.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run move <src> <dst>      Move or rename source to destination");
+            println!("  run mov                   Prompt for source and destination\n");
+            println!("{}", electric_blue("EXAMPLES:").bold());
+            println!("  run mov draft.txt final.txt");
+            println!("  run mov assets/ public/assets/");
+        }
+        "del" | "dlt" | "delete" => {
+            println!("{} del (alias: dlt)", electric_blue("COMMAND:").bold());
+            println!("Safely delete files or directories with confirmation prompt.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run del <path>            Prompt confirmation [y/N] then delete");
+            println!("  run dlt                   Prompt for target path and confirmation\n");
+            println!("{}", electric_blue("SAFETY:").bold());
+            println!("  Defaults to 'No' (false). Pressing Enter cancels deletion immediately.");
+        }
+        "clear" | "clr" => {
+            println!("{} clear (alias: clr)", electric_blue("COMMAND:").bold());
+            println!("Clear terminal screen.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run clear");
+            println!("  run clr");
+        }
+        "go" | "jmp" | "nav" => {
+            println!("{} go (alias: jmp, nav)", electric_blue("COMMAND:").bold());
+            println!("Smart directory navigation replacing manual cd commands.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run go root               Jump to home directory (~)");
+            println!("  run go back               Step back to parent directory (..)");
+            println!("  run go <folder>           Jump to subfolder or fuzzy-search hubs");
+            println!("  run jmp                   Open interactive folder picker menu\n");
+            println!("{}", electric_blue("INTEGRATION:").bold());
+            println!("  Add 'eval \"$(run init)\"' to ~/.zshrc for seamless in-place switching.");
+        }
+        "project" | "prj" => {
+            println!("{} project (alias: prj)", electric_blue("COMMAND:").bold());
+            println!("Smart project hub scanner and interactive IDE launcher.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run project               Scan development hubs and pick project");
+            println!("  run prj .                 Open current directory");
+            println!("  run prj <name>            Search and jump directly to project\n");
+            println!("{}", electric_blue("IDE / ACTION MENU:").bold());
+            println!("  1. Visual Studio Code (code)");
+            println!("  2. Cursor (cursor)");
+            println!("  3. Xcode (xcode - opens .xcworkspace/.xcodeproj if present)");
+            println!("  4. Hanya Pindah Terminal / Saja (switches active terminal directory)");
+            println!("  5. Cancel");
+        }
+        "dev" => {
+            println!("{} dev", electric_blue("COMMAND:").bold());
+            println!("Run development server for current active project.\n");
+            println!("{}", electric_blue("DETECTED SIGNATURES:").bold());
+            println!("  - Cargo.toml     -> cargo run");
+            println!("  - package.json   -> pnpm/yarn/bun/npm run dev");
+            println!("  - pubspec.yaml   -> flutter run");
+            println!("  - go.mod         -> go run .");
+            println!("  - Makefile       -> make dev\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run dev");
+        }
+        "build" | "bld" => {
+            println!("{} build (alias: bld)", electric_blue("COMMAND:").bold());
+            println!("Build or compile current active project in release mode.\n");
+            println!("{}", electric_blue("DETECTED SIGNATURES:").bold());
+            println!("  - Cargo.toml     -> cargo build --release");
+            println!("  - package.json   -> pnpm/yarn/bun/npm run build");
+            println!("  - pubspec.yaml   -> flutter build");
+            println!("  - go.mod         -> go build .");
+            println!("  - Makefile       -> make build\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run build");
+            println!("  run bld");
+        }
+        "init" | "ini" => {
+            println!("{} init (alias: ini)", electric_blue("COMMAND:").bold());
+            println!("Generate shell integration script for automatic cd in active shell.\n");
+            println!("{}", electric_blue("SETUP:").bold());
+            println!("  echo 'eval \"$(run init)\"' >> ~/.zshrc");
+            println!("  source ~/.zshrc");
+        }
+        "cancel" | "cancellation" => {
+            println!("{}", electric_blue("CANCELLATION STANDARD:").bold());
+            println!("All commands support non-destructive cancellation:\n");
+            println!("  1. Menus: Select 'Cancel' (last option) to abort immediately.");
+            println!("  2. Text prompts: Press Enter on blank input to cancel.");
+            println!("  3. Delete prompts: Enter 'n' or press Enter (default No) to cancel.");
+        }
+        other => {
+            println!("No dedicated topic found for '{}'.", other);
+            print_main_help();
+        }
+    }
+    println!();
 }
 
 #[cfg(test)]
