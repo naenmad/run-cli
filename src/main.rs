@@ -131,7 +131,7 @@ fn handle_make(
     let resolved_type = match target_type {
         Some(t) => t,
         None => {
-            let options = ["Folder", "File"];
+            let options = ["Folder", "File", "Cancel"];
             let selection = Select::with_theme(theme)
                 .with_prompt("Select item type to create")
                 .items(&options)
@@ -140,7 +140,11 @@ fn handle_make(
 
             match selection {
                 0 => MakeTargetType::Folder,
-                _ => MakeTargetType::File,
+                1 => MakeTargetType::File,
+                _ => {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
             }
         }
     };
@@ -149,13 +153,19 @@ fn handle_make(
         Some(path) => path,
         None => {
             let prompt_text = match resolved_type {
-                MakeTargetType::Folder => "Folder path",
-                MakeTargetType::File => "File path",
+                MakeTargetType::Folder => "Folder path (leave blank to cancel)",
+                MakeTargetType::File => "File path (leave blank to cancel)",
             };
             let input: String = Input::with_theme(theme)
                 .with_prompt(prompt_text)
+                .allow_empty(true)
                 .interact_text()?;
-            PathBuf::from(input.trim())
+            let trimmed = input.trim();
+            if trimmed.is_empty() {
+                println!("Cancelled.");
+                return Ok(());
+            }
+            PathBuf::from(trimmed)
         }
     };
 
@@ -171,15 +181,17 @@ fn handle_open(theme: &ColorfulTheme, target: Option<String>) -> Result<()> {
         Some(name) => name,
         None => {
             let input: String = Input::with_theme(theme)
-                .with_prompt("Application name")
+                .with_prompt("Application name (leave blank to cancel)")
+                .allow_empty(true)
                 .interact_text()?;
-            input.trim().to_string()
+            let trimmed = input.trim().to_string();
+            if trimmed.is_empty() {
+                println!("Cancelled.");
+                return Ok(());
+            }
+            trimmed
         }
     };
-
-    if app_name.is_empty() {
-        bail!("Application name cannot be empty");
-    }
 
     let status = Command::new("open")
         .arg("-a")
@@ -205,9 +217,15 @@ fn handle_copy(
         Some(path) => path,
         None => {
             let input: String = Input::with_theme(theme)
-                .with_prompt("Source path")
+                .with_prompt("Source path (leave blank to cancel)")
+                .allow_empty(true)
                 .interact_text()?;
-            PathBuf::from(input.trim())
+            let trimmed = input.trim();
+            if trimmed.is_empty() {
+                println!("Cancelled.");
+                return Ok(());
+            }
+            PathBuf::from(trimmed)
         }
     };
 
@@ -215,9 +233,15 @@ fn handle_copy(
         Some(path) => path,
         None => {
             let input: String = Input::with_theme(theme)
-                .with_prompt("Destination path")
+                .with_prompt("Destination path (leave blank to cancel)")
+                .allow_empty(true)
                 .interact_text()?;
-            PathBuf::from(input.trim())
+            let trimmed = input.trim();
+            if trimmed.is_empty() {
+                println!("Cancelled.");
+                return Ok(());
+            }
+            PathBuf::from(trimmed)
         }
     };
 
@@ -234,9 +258,15 @@ fn handle_move(
         Some(path) => path,
         None => {
             let input: String = Input::with_theme(theme)
-                .with_prompt("Source path")
+                .with_prompt("Source path (leave blank to cancel)")
+                .allow_empty(true)
                 .interact_text()?;
-            PathBuf::from(input.trim())
+            let trimmed = input.trim();
+            if trimmed.is_empty() {
+                println!("Cancelled.");
+                return Ok(());
+            }
+            PathBuf::from(trimmed)
         }
     };
 
@@ -244,9 +274,15 @@ fn handle_move(
         Some(path) => path,
         None => {
             let input: String = Input::with_theme(theme)
-                .with_prompt("Destination path")
+                .with_prompt("Destination path (leave blank to cancel)")
+                .allow_empty(true)
                 .interact_text()?;
-            PathBuf::from(input.trim())
+            let trimmed = input.trim();
+            if trimmed.is_empty() {
+                println!("Cancelled.");
+                return Ok(());
+            }
+            PathBuf::from(trimmed)
         }
     };
 
@@ -259,9 +295,15 @@ fn handle_del(theme: &ColorfulTheme, target: Option<PathBuf>) -> Result<()> {
         Some(p) => p,
         None => {
             let input: String = Input::with_theme(theme)
-                .with_prompt("Path to delete")
+                .with_prompt("Path to delete (leave blank to cancel)")
+                .allow_empty(true)
                 .interact_text()?;
-            PathBuf::from(input.trim())
+            let trimmed = input.trim();
+            if trimmed.is_empty() {
+                println!("Cancelled.");
+                return Ok(());
+            }
+            PathBuf::from(trimmed)
         }
     };
 
@@ -454,7 +496,7 @@ fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
                     let term = dialoguer::console::Term::stderr();
                     let home_str = home_dir.to_string_lossy();
 
-                    let display_items: Vec<String> = candidates
+                    let mut display_items: Vec<String> = candidates
                         .iter()
                         .take(15)
                         .map(|p| {
@@ -466,6 +508,7 @@ fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
                             }
                         })
                         .collect();
+                    display_items.push("Cancel".to_string());
 
                     let prompt = format!("Multiple folders match '{query}'. Select target:");
                     let selection = Select::with_theme(theme)
@@ -473,6 +516,11 @@ fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
                         .items(&display_items)
                         .default(0)
                         .interact_on(&term)?;
+
+                    if selection == display_items.len() - 1 {
+                        println!("Cancelled.");
+                        return Ok(());
+                    }
 
                     candidates[selection].clone()
                 }
@@ -508,12 +556,18 @@ fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
                     paths.push(path);
                 }
             }
+            options.push("Cancel".to_string());
 
             let selection = Select::with_theme(theme)
                 .with_prompt("Select target folder")
                 .items(&options)
                 .default(0)
                 .interact_on(&term)?;
+
+            if selection == options.len() - 1 {
+                println!("Cancelled.");
+                return Ok(());
+            }
 
             paths[selection].clone()
         }
