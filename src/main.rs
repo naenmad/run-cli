@@ -427,30 +427,32 @@ fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
             current_dir.parent().unwrap_or(&current_dir).to_path_buf()
         }
         Some(name) => {
-            let direct = current_dir.join(name);
-            if direct.is_dir() {
-                direct
-            } else {
-                let name_lower = name.to_lowercase();
-                let mut found = None;
+            let name_lower = name.to_lowercase();
+            let mut found = None;
 
-                if let Ok(entries) = fs::read_dir(&current_dir) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if path.is_dir()
-                            && let Some(folder_name) = path.file_name().and_then(|n| n.to_str())
-                            && !folder_name.starts_with('.')
-                            && folder_name.to_lowercase() == name_lower
-                        {
-                            found = Some(path);
-                            break;
-                        }
+            if let Ok(entries) = fs::read_dir(&current_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir()
+                        && let Some(folder_name) = path.file_name().and_then(|n| n.to_str())
+                        && !folder_name.starts_with('.')
+                        && folder_name.to_lowercase() == name_lower
+                    {
+                        found = Some(path);
+                        break;
                     }
                 }
+            }
 
-                match found {
-                    Some(p) => p,
-                    None => bail!("directory '{name}' not found in current path"),
+            match found {
+                Some(p) => p,
+                None => {
+                    let direct = current_dir.join(name);
+                    if direct.is_dir() {
+                        direct
+                    } else {
+                        bail!("directory '{name}' not found in current path");
+                    }
                 }
             }
         }
