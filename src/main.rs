@@ -1786,8 +1786,9 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
     let ide_options = [
         "Visual Studio Code (code)",
         "Cursor (cursor)",
+        "Antigravity IDE (antigravity)",
         "Xcode (xcode)",
-        "Hanya Pindah Terminal / Saja",
+        "Switch Terminal Directory Only",
         cancel_btn.as_str(),
     ];
 
@@ -1813,8 +1814,9 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
     match ide_selection {
         0 => open_in_vscode(&canonical, is_shell_resolve)?,
         1 => open_in_cursor(&canonical, is_shell_resolve)?,
-        2 => open_in_xcode(&canonical, is_shell_resolve)?,
-        3 => {
+        2 => open_in_antigravity(&canonical, is_shell_resolve)?,
+        3 => open_in_xcode(&canonical, is_shell_resolve)?,
+        4 => {
             if is_shell_resolve {
                 println!("{}", canonical.display());
             } else {
@@ -1832,6 +1834,56 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Opens project directory in Google Antigravity IDE.
+fn open_in_antigravity(path: &Path, is_shell_resolve: bool) -> Result<()> {
+    let status = Command::new("antigravity").arg(path).status();
+    let success = match status {
+        Ok(s) => s.success(),
+        Err(_) => false,
+    };
+
+    let success = if !success {
+        match Command::new("agy").arg(path).status() {
+            Ok(s) => s.success(),
+            Err(_) => false,
+        }
+    } else {
+        true
+    };
+
+    if !success {
+        let fallback = Command::new("open")
+            .arg("-a")
+            .arg("Antigravity IDE")
+            .arg(path)
+            .status();
+        let fallback_ok = match fallback {
+            Ok(s) => s.success(),
+            Err(_) => false,
+        };
+
+        if !fallback_ok {
+            let alt_fallback = Command::new("open")
+                .arg("-a")
+                .arg("Antigravity")
+                .arg(path)
+                .status()
+                .with_context(|| "failed to launch Antigravity IDE via open -a")?;
+            if !alt_fallback.success() {
+                bail!("failed to launch Antigravity IDE (ensure Antigravity IDE is installed in /Applications)");
+            }
+        }
+    }
+
+    let msg = format!("Opened project in Antigravity IDE: {}", path.display());
+    if is_shell_resolve {
+        eprintln!("{}", msg.green());
+    } else {
+        println!("{}", msg.green());
+    }
     Ok(())
 }
 
@@ -2589,9 +2641,10 @@ fn print_command_detail(cmd: &str) {
             println!("{}", electric_blue("IDE / ACTION MENU:").bold());
             println!("  1. Visual Studio Code (code)");
             println!("  2. Cursor (cursor)");
-            println!("  3. Xcode (xcode - opens .xcworkspace/.xcodeproj if present)");
-            println!("  4. Hanya Pindah Terminal / Saja (switches active terminal directory)");
-            println!("  5. Cancel");
+            println!("  3. Antigravity IDE (antigravity)");
+            println!("  4. Xcode (xcode - opens .xcworkspace/.xcodeproj if present)");
+            println!("  5. Switch Terminal Directory Only (switches active terminal directory)");
+            println!("  6. Cancel");
         }
         "dev" => {
             println!("{} dev", electric_blue("COMMAND:").bold());

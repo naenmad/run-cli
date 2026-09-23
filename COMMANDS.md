@@ -10,7 +10,7 @@
 
 | Semantic Command | 3-Letter Alias | Additional Aliases | Purpose |
 | :--- | :--- | :--- | :--- |
-| `project` | `prj` | - | Scan workspace hubs and launch in VS Code, Cursor, Xcode, or terminal |
+| `project` | `prj` | - | Scan workspace hubs and launch in VS Code, Cursor, Antigravity, Xcode, or terminal |
 | `dev` | `dev` | `develop` | Auto-detect stack (Rust, Node, Flutter, Go) and start development server |
 | `build` | `bld` | - | Compile active project in release mode |
 | `test` | `tst` | - | Polyglot automated test runner (`cargo test`, `npm test`, `pytest`, `flutter test`, `go test`) |

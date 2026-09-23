@@ -82,7 +82,7 @@ Then reload your shell:
 source ~/.zshrc
 ```
 
-Now `run go root`, `run go back`, or selecting a project with **"Hanya Pindah Terminal / Saja"** will change your terminal's directory instantly!
+Now `run go root`, `run go back`, or selecting a project with **"Switch Terminal Directory Only"** will change your terminal's directory instantly!
 
 ---
 
@@ -93,7 +93,7 @@ Now `run go root`, `run go back`, or selecting a project with **"Hanya Pindah Te
 ### 🛠️ Developer & Workspace Suite
 | Command | Alias | Purpose & Highlights |
 | :--- | :--- | :--- |
-| `project` | `prj` | Scan project directories & open in **VS Code**, **Cursor**, **Xcode**, or terminal |
+| `project` | `prj` | Scan project directories & open in **VS Code**, **Cursor**, **Antigravity**, **Xcode**, or terminal |
 | `dev` | `dev` | Auto-detects project stack (`cargo`, `npm`, `pnpm`, `flutter`, `go`) and starts dev server |
 | `build` | `bld` | Compiles active project in release mode |
 | `test` | `tst` | Polyglot automated test runner (`cargo test`, `npm test`, `pytest`, `flutter test`, `go test`) |
