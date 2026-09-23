@@ -12,6 +12,7 @@ use dialoguer::{Confirm, Input, Select};
 #[derive(Parser)]
 #[command(name = "run")]
 #[command(about = "Productivity CLI utility for macOS with dual-mode interaction", version)]
+#[command(disable_help_subcommand = true)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -64,6 +65,13 @@ enum Commands {
     /// Clear the terminal screen
     #[command(name = "clear", alias = "clr")]
     Clear,
+
+    /// Display complete command reference and usage tutorial
+    #[command(name = "help", alias = "guide", alias = "doc")]
+    Help {
+        /// Optional command name or alias to inspect
+        command: Option<String>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -96,6 +104,7 @@ fn run_app() -> Result<()> {
         } => handle_move(&theme, source, destination),
         Commands::Del { target } => handle_del(&theme, target),
         Commands::Clear => clear_terminal(),
+        Commands::Help { command } => handle_help(command.as_deref()),
     }
 }
 
@@ -392,6 +401,44 @@ fn clear_terminal() -> Result<()> {
     Ok(())
 }
 
+const COMMANDS_DOC: &str = include_str!("../COMMANDS.md");
+
+/// Displays the complete command reference or details for a requested command.
+fn handle_help(target_command: Option<&str>) -> Result<()> {
+    match target_command {
+        None => {
+            println!("{COMMANDS_DOC}");
+        }
+        Some(cmd) => {
+            let cmd_lower = cmd.to_lowercase();
+            let mut matched_section = None;
+
+            for section in COMMANDS_DOC.split("\n---") {
+                let trimmed = section.trim();
+                for line in trimmed.lines() {
+                    let line_lower = line.to_lowercase();
+                    if line.starts_with('#') && line_lower.contains(&cmd_lower) {
+                        matched_section = Some(trimmed);
+                        break;
+                    }
+                }
+                if matched_section.is_some() {
+                    break;
+                }
+            }
+
+            match matched_section {
+                Some(section) => println!("\n{section}\n"),
+                None => {
+                    println!("No specific reference found for '{cmd}'. Displaying full guide:\n");
+                    println!("{COMMANDS_DOC}");
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -441,6 +488,16 @@ mod tests {
         assert!(matches!(
             Cli::try_parse_from(["run", "clr"]),
             Ok(Cli { command: Commands::Clear })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "help"]),
+            Ok(Cli { command: Commands::Help { command: None } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "guide", "make"]),
+            Ok(Cli { command: Commands::Help { command: Some(ref cmd) } }) if cmd == "make"
         ));
     }
 }
