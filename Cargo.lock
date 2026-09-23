@@ -259,6 +259,7 @@ dependencies = [
  "clap",
  "colored",
  "dialoguer",
+ "strsim",
 ]
 
 [[package]]

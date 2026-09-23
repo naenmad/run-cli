@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -414,7 +415,7 @@ fn clear_terminal() -> Result<()> {
     Ok(())
 }
 
-/// Handles smart directory navigation to root, back, specific subfolders, or via interactive menu.
+/// Handles smart directory navigation to root, back, fuzzy-searched subfolders, or via interactive menu.
 fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
     let current_dir = std::env::current_dir().context("failed to read current working directory")?;
     let home_dir = std::env::var("HOME")
@@ -426,33 +427,54 @@ fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
         Some("back") | Some("..") => {
             current_dir.parent().unwrap_or(&current_dir).to_path_buf()
         }
-        Some(name) => {
-            let name_lower = name.to_lowercase();
-            let mut found = None;
+        Some(query) => {
+            let candidates = find_matching_directories(&current_dir, &home_dir, query);
 
-            if let Ok(entries) = fs::read_dir(&current_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir()
-                        && let Some(folder_name) = path.file_name().and_then(|n| n.to_str())
-                        && !folder_name.starts_with('.')
-                        && folder_name.to_lowercase() == name_lower
-                    {
-                        found = Some(path);
-                        break;
-                    }
-                }
-            }
+            if candidates.is_empty() {
+                bail!("no directory matching '{query}' found");
+            } else if candidates.len() == 1 {
+                candidates.into_iter().next().unwrap()
+            } else {
+                let q_lower = query.to_lowercase();
+                let top_name = candidates[0]
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                let second_name = candidates
+                    .get(1)
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
 
-            match found {
-                Some(p) => p,
-                None => {
-                    let direct = current_dir.join(name);
-                    if direct.is_dir() {
-                        direct
-                    } else {
-                        bail!("directory '{name}' not found in current path");
-                    }
+                if top_name == q_lower && second_name != q_lower {
+                    candidates.into_iter().next().unwrap()
+                } else {
+                    let term = dialoguer::console::Term::stderr();
+                    let home_str = home_dir.to_string_lossy();
+
+                    let display_items: Vec<String> = candidates
+                        .iter()
+                        .take(15)
+                        .map(|p| {
+                            let p_str = p.to_string_lossy();
+                            if p_str.starts_with(home_str.as_ref()) {
+                                format!("~{}", &p_str[home_str.len()..])
+                            } else {
+                                p_str.to_string()
+                            }
+                        })
+                        .collect();
+
+                    let prompt = format!("Multiple folders match '{query}'. Select target:");
+                    let selection = Select::with_theme(theme)
+                        .with_prompt(prompt)
+                        .items(&display_items)
+                        .default(0)
+                        .interact_on(&term)?;
+
+                    candidates[selection].clone()
                 }
             }
         }
@@ -511,6 +533,123 @@ fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Searches for directories matching the query using fuzzy and substring scoring across current dir and system hubs.
+fn find_matching_directories(current_dir: &Path, home_dir: &Path, query: &str) -> Vec<PathBuf> {
+    let q_lower = query.trim().to_lowercase();
+    let mut scored: Vec<(f64, PathBuf)> = Vec::new();
+    let mut visited: HashSet<PathBuf> = HashSet::new();
+
+    let mut search_roots: Vec<(PathBuf, usize)> = Vec::new();
+    search_roots.push((current_dir.to_path_buf(), 2));
+
+    let hubs = [
+        "Developer",
+        "Downloads",
+        "Documents",
+        "Desktop",
+        "Projects",
+        "Pictures",
+        "Code",
+    ];
+
+    for hub in &hubs {
+        let hub_path = home_dir.join(hub);
+        if hub_path.is_dir() {
+            search_roots.push((hub_path, 2));
+        }
+    }
+
+    let ignored_names = [
+        "Library", ".Trash", ".git", "node_modules", "target", ".cargo", ".rustup",
+        ".gemini", ".vscode", ".npm", ".cache", ".local", "venv", ".venv",
+    ];
+
+    for (root, max_depth) in search_roots {
+        scan_for_query(
+            &root,
+            &q_lower,
+            current_dir,
+            max_depth,
+            &ignored_names,
+            &mut visited,
+            &mut scored,
+        );
+    }
+
+    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    scored.into_iter().map(|(_, path)| path).collect()
+}
+
+fn scan_for_query(
+    dir: &Path,
+    q_lower: &str,
+    current_dir: &Path,
+    depth: usize,
+    ignored_names: &[&str],
+    visited: &mut HashSet<PathBuf>,
+    scored: &mut Vec<(f64, PathBuf)>,
+) {
+    if depth == 0 {
+        return;
+    }
+
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+
+        if name.starts_with('.') || ignored_names.contains(&name) {
+            continue;
+        }
+
+        if visited.insert(path.clone()) {
+            let name_lower = name.to_lowercase();
+            let mut score = 0.0;
+
+            if name_lower == q_lower {
+                score = 1.0;
+            } else if name_lower.starts_with(q_lower) {
+                score = 0.90;
+            } else if name_lower.contains(q_lower) {
+                score = 0.80;
+            } else if q_lower.len() >= 3 && name_lower.len() >= 3 {
+                let similarity = strsim::jaro_winkler(&name_lower, q_lower);
+                if similarity >= 0.82 {
+                    score = similarity * 0.75;
+                }
+            }
+
+            if score > 0.0 {
+                if path.starts_with(current_dir) {
+                    score += 0.05;
+                }
+                scored.push((score, path.clone()));
+            }
+
+            scan_for_query(
+                &path,
+                q_lower,
+                current_dir,
+                depth - 1,
+                ignored_names,
+                visited,
+                scored,
+            );
+        }
+    }
 }
 
 /// Generates the shell integration wrapper function for zsh and bash.
