@@ -20,6 +20,8 @@ Every primary command supports both its full English verb and a mandatory three-
 | `move` | `mov` | Move or rename files and directories | `run move old.txt new.txt` |
 | `del` | `dlt` | Safely delete files or directories | `run del temp/` |
 | `clear` | `clr` | Clear the terminal screen | `run clr` |
+| `go` | `jmp` | Smart folder navigation (root, back, subfolder, picker) | `run go root` / `run jmp` |
+| `help` | `guide` | Display full tutorial and command reference | `run help` / `run help go` |
 
 ## Dual-Mode Interaction
 

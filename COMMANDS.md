@@ -127,7 +127,53 @@ Clears the terminal viewport.
 
 ---
 
-### 7. `help` (Alias: `guide`)
+### 7. `go` (Alias: `jmp`, `nav`)
+Smart directory navigation that replaces manual `cd` commands.
+
+* **Jump to Home (`root`):**
+  ```bash
+  run go root
+  # or with alias:
+  run jmp root
+  ```
+* **Step Back to Parent Directory (`back`):**
+  ```bash
+  run go back
+  # or with alias:
+  run jmp back
+  ```
+* **Jump to Child or Nested Folder:**
+  ```bash
+  run go code
+  # or with alias:
+  run jmp src
+  ```
+* **Interactive Mode (Folder Picker):**
+  Run without arguments to display an interactive menu of subdirectories and home/parent shortcuts:
+  ```bash
+  run go
+  # or with alias:
+  run jmp
+  ```
+
+> Note: To enable in-place directory switching in your active terminal, add this to your `~/.zshrc`:
+> ```bash
+> eval "$(run init)"
+> ```
+
+---
+
+### 8. `init` (Alias: `ini`)
+Generates the shell integration script for `~/.zshrc` or `~/.bashrc`.
+
+* **Usage:**
+  ```bash
+  eval "$(run init)"
+  ```
+
+---
+
+### 9. `help` (Alias: `guide`)
 Displays this comprehensive reference and tutorial in the terminal.
 
 * **Usage:**
@@ -135,6 +181,7 @@ Displays this comprehensive reference and tutorial in the terminal.
   run help
   # or view specific command documentation:
   run help make
+  run help go
   ```
 
 ---
@@ -176,4 +223,20 @@ Open desktop tools straight from your terminal workflow:
 ```bash
 run opn Safari
 run opn "Google Chrome"
+```
+
+### Scenario 5: Smart Directory Navigation
+Quickly jump around directories without typing path slashes or cd:
+```bash
+# Jump to user home
+run go root
+
+# Move into project subfolder
+run go src
+
+# Step back to parent folder
+run go back
+
+# Open interactive folder picker
+run go
 ```

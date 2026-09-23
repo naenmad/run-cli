@@ -21,7 +21,9 @@ Command mapping:
 | `copy` | `cpy` | Copy files or directories | `run copy file.txt backup.txt` |
 | `move` | `mov` | Move or rename files and directories | `run move old.txt new.txt` |
 | `del`  | `dlt` | Safely delete files or directories | `run del temp/` |
-| `clr`  | `clr` | Clear the terminal screen | `run clr` |
+| `clear`| `clr` | Clear the terminal screen | `run clr` |
+| `go`   | `jmp` | Smart folder navigation (root, back, subfolder, picker) | `run go root` / `run jmp` |
+| `help` | `guide`| Display complete documentation and tutorial | `run help` / `run help go` |
 
 ## 3. Dual-Mode Interaction Rules
 * **Direct Mode**: When arguments are provided in full (such as `run make folder project-x`), the CLI executes the command immediately without interactive pauses.

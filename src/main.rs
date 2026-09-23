@@ -66,6 +66,17 @@ enum Commands {
     #[command(name = "clear", alias = "clr")]
     Clear,
 
+    /// Smart directory navigation (root, back, subfolder, or interactive menu)
+    #[command(name = "go", alias = "jmp", alias = "nav")]
+    Go {
+        /// Target folder name, 'root', or 'back'
+        target: Option<String>,
+    },
+
+    /// Generate shell integration script for automatic directory switching
+    #[command(name = "init", alias = "ini")]
+    Init,
+
     /// Display complete command reference and usage tutorial
     #[command(name = "help", alias = "guide", alias = "doc")]
     Help {
@@ -104,6 +115,8 @@ fn run_app() -> Result<()> {
         } => handle_move(&theme, source, destination),
         Commands::Del { target } => handle_del(&theme, target),
         Commands::Clear => clear_terminal(),
+        Commands::Go { target } => handle_go(&theme, target.as_deref()),
+        Commands::Init => handle_init(),
         Commands::Help { command } => handle_help(command.as_deref()),
     }
 }
@@ -401,6 +414,121 @@ fn clear_terminal() -> Result<()> {
     Ok(())
 }
 
+/// Handles smart directory navigation to root, back, specific subfolders, or via interactive menu.
+fn handle_go(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
+    let current_dir = std::env::current_dir().context("failed to read current working directory")?;
+    let home_dir = std::env::var("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/"));
+
+    let target_path = match target {
+        Some("root") | Some("~") => home_dir,
+        Some("back") | Some("..") => {
+            current_dir.parent().unwrap_or(&current_dir).to_path_buf()
+        }
+        Some(name) => {
+            let direct = current_dir.join(name);
+            if direct.is_dir() {
+                direct
+            } else {
+                let name_lower = name.to_lowercase();
+                let mut found = None;
+
+                if let Ok(entries) = fs::read_dir(&current_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir()
+                            && let Some(folder_name) = path.file_name().and_then(|n| n.to_str())
+                            && !folder_name.starts_with('.')
+                            && folder_name.to_lowercase() == name_lower
+                        {
+                            found = Some(path);
+                            break;
+                        }
+                    }
+                }
+
+                match found {
+                    Some(p) => p,
+                    None => bail!("directory '{name}' not found in current path"),
+                }
+            }
+        }
+        None => {
+            let term = dialoguer::console::Term::stderr();
+            let mut options = Vec::new();
+            let mut paths = Vec::new();
+
+            options.push("~ (Home directory)".to_string());
+            paths.push(home_dir);
+
+            if let Some(parent) = current_dir.parent() {
+                options.push(".. (Parent directory)".to_string());
+                paths.push(parent.to_path_buf());
+            }
+
+            if let Ok(entries) = fs::read_dir(&current_dir) {
+                let mut dirs = Vec::new();
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir()
+                        && let Some(name) = path.file_name().and_then(|n| n.to_str())
+                        && !name.starts_with('.')
+                    {
+                        dirs.push((name.to_string(), path));
+                    }
+                }
+                dirs.sort_by_key(|a| a.0.to_lowercase());
+                for (name, path) in dirs {
+                    options.push(format!("{name}/"));
+                    paths.push(path);
+                }
+            }
+
+            let selection = Select::with_theme(theme)
+                .with_prompt("Select target folder")
+                .items(&options)
+                .default(0)
+                .interact_on(&term)?;
+
+            paths[selection].clone()
+        }
+    };
+
+    let is_shell_resolve = std::env::var("RUN_SHELL_RESOLVE")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+
+    if is_shell_resolve {
+        println!("{}", target_path.display());
+    } else {
+        println!("Target directory: {}", target_path.display());
+        eprintln!(
+            "Tip: Add 'eval \"$(run init)\"' to your ~/.zshrc for seamless in-place terminal directory switching."
+        );
+    }
+
+    Ok(())
+}
+
+/// Generates the shell integration wrapper function for zsh and bash.
+fn handle_init() -> Result<()> {
+    println!(
+        r#"run() {{
+    if [ "$1" = "go" ] || [ "$1" = "jmp" ] || [ "$1" = "nav" ]; then
+        local target
+        target="$(RUN_SHELL_RESOLVE=1 command run "$@")" || return $?
+        if [ -n "$target" ] && [ -d "$target" ]; then
+            cd "$target"
+        fi
+    else
+        command run "$@"
+    fi
+}}"#
+    );
+    Ok(())
+}
+
 const COMMANDS_DOC: &str = include_str!("../COMMANDS.md");
 
 /// Displays the complete command reference or details for a requested command.
@@ -498,6 +626,26 @@ mod tests {
         assert!(matches!(
             Cli::try_parse_from(["run", "guide", "make"]),
             Ok(Cli { command: Commands::Help { command: Some(ref cmd) } }) if cmd == "make"
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "go", "root"]),
+            Ok(Cli { command: Commands::Go { target: Some(ref t) } }) if t == "root"
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "jmp", "back"]),
+            Ok(Cli { command: Commands::Go { target: Some(ref t) } }) if t == "back"
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "nav"]),
+            Ok(Cli { command: Commands::Go { target: None } })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "ini"]),
+            Ok(Cli { command: Commands::Init })
         ));
     }
 }
