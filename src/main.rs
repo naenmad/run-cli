@@ -1077,35 +1077,178 @@ fn handle_make(
     }
 }
 
-/// Handles opening macOS applications with a fallback prompt when target is omitted.
+/// Scans common macOS application directories for installed applications.
+fn scan_installed_apps() -> Vec<String> {
+    let mut apps = HashSet::new();
+    let mut search_paths = vec![
+        PathBuf::from("/Applications"),
+        PathBuf::from("/System/Applications"),
+        PathBuf::from("/System/Applications/Utilities"),
+    ];
+
+    if let Some(home) = std::env::var_os("HOME") {
+        search_paths.push(PathBuf::from(home).join("Applications"));
+    }
+
+    for dir in search_paths {
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("app")
+                    && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+                {
+                    apps.insert(stem.to_string());
+                }
+            }
+        }
+    }
+
+    let mut list: Vec<String> = apps.into_iter().collect();
+    list.sort_by_key(|a| a.to_lowercase());
+    list
+}
+
+/// Find matching installed applications by exact, prefix, substring, or fuzzy typo matching.
+fn find_matching_apps(query: &str, installed: &[String]) -> Vec<String> {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() {
+        return Vec::new();
+    }
+
+    // 1. Exact case-insensitive match
+    if let Some(exact) = installed.iter().find(|a| a.to_lowercase() == q) {
+        return vec![exact.clone()];
+    }
+
+    // 2. Prefix matches (e.g. "what" -> "WhatsApp")
+    let prefix_matches: Vec<String> = installed
+        .iter()
+        .filter(|a| a.to_lowercase().starts_with(&q))
+        .cloned()
+        .collect();
+
+    if !prefix_matches.is_empty() {
+        return prefix_matches;
+    }
+
+    // 3. Substring matches (e.g. "code" -> "Visual Studio Code")
+    let substr_matches: Vec<String> = installed
+        .iter()
+        .filter(|a| a.to_lowercase().contains(&q))
+        .cloned()
+        .collect();
+
+    if !substr_matches.is_empty() {
+        return substr_matches;
+    }
+
+    // 4. Fuzzy Levenshtein distance matches (e.g. "whasapp", "watsap")
+    let mut fuzzy_candidates: Vec<(&String, usize)> = installed
+        .iter()
+        .map(|a| {
+            let dist = levenshtein_distance(&q, &a.to_lowercase());
+            (a, dist)
+        })
+        .filter(|(_, dist)| *dist <= 3)
+        .collect();
+
+    fuzzy_candidates.sort_by_key(|(_, dist)| *dist);
+    fuzzy_candidates.into_iter().take(5).map(|(a, _)| a.clone()).collect()
+}
+
+/// Handles opening macOS applications with smart fuzzy matching and typo resolution.
 fn handle_open(theme: &ColorfulTheme, target: Option<String>) -> Result<()> {
+    let installed = scan_installed_apps();
+
     let app_name = match target {
         Some(name) => name,
         None => {
-            let input: String = Input::with_theme(theme)
-                .with_prompt("Application name (leave blank to cancel)")
-                .allow_empty(true)
-                .interact_text()?;
-            let trimmed = input.trim().to_string();
-            if trimmed.is_empty() {
-                println!("Cancelled.");
-                return Ok(());
+            if installed.is_empty() {
+                let input: String = Input::with_theme(theme)
+                    .with_prompt("Application name (leave blank to cancel)")
+                    .allow_empty(true)
+                    .interact_text()?;
+                let trimmed = input.trim().to_string();
+                if trimmed.is_empty() {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+                trimmed
+            } else {
+                let mut menu_items = installed.clone();
+                menu_items.push(cancel_option());
+
+                ui::print_key_hints();
+                let selection = FuzzySelect::with_theme(theme)
+                    .with_prompt("Select application to open (type to filter)")
+                    .items(&menu_items)
+                    .default(0)
+                    .interact()?;
+
+                if selection >= installed.len() {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+                menu_items[selection].clone()
             }
-            trimmed
         }
     };
 
-    let status = Command::new("open")
-        .arg("-a")
-        .arg(&app_name)
-        .status()
-        .with_context(|| format!("failed to execute 'open -a {app_name}'"))?;
-
-    if !status.success() {
-        bail!("application '{app_name}' was not found or failed to launch");
+    // 1. Try launching with the exact name given
+    let direct_status = Command::new("open").arg("-a").arg(&app_name).status();
+    if direct_status.map(|s| s.success()).unwrap_or(false) {
+        println!("{}", format!("Opened application: {app_name}").green().bold());
+        return Ok(());
     }
 
-    println!("Opened application: {app_name}");
+    // 2. If direct launch fails, resolve via smart matching (exact, prefix, substring, Levenshtein)
+    let matches = find_matching_apps(&app_name, &installed);
+
+    if matches.is_empty() {
+        bail!("application '{app_name}' was not found in /Applications");
+    } else if matches.len() == 1 {
+        let target_app = &matches[0];
+        println!(
+            "{}",
+            format!("Matched application '{target_app}'. Launching...").dimmed()
+        );
+        let status = Command::new("open")
+            .arg("-a")
+            .arg(target_app)
+            .status()
+            .with_context(|| format!("failed to launch application '{target_app}'"))?;
+        if !status.success() {
+            bail!("failed to launch application '{target_app}'");
+        }
+        println!("{}", format!("Opened application: {target_app}").green().bold());
+    } else {
+        let mut menu_items = matches.clone();
+        menu_items.push(cancel_option());
+
+        let prompt = format!("Unknown application '{app_name}'. Did you mean:");
+        let selection = Select::with_theme(theme)
+            .with_prompt(prompt)
+            .items(&menu_items)
+            .default(0)
+            .interact()?;
+
+        if selection >= matches.len() {
+            println!("Cancelled.");
+            return Ok(());
+        }
+
+        let selected_app = &matches[selection];
+        let status = Command::new("open")
+            .arg("-a")
+            .arg(selected_app)
+            .status()
+            .with_context(|| format!("failed to launch application '{selected_app}'"))?;
+        if !status.success() {
+            bail!("failed to launch application '{selected_app}'");
+        }
+        println!("{}", format!("Opened application: {selected_app}").green().bold());
+    }
+
     Ok(())
 }
 
@@ -3311,5 +3454,27 @@ mod tests {
         let res =
             resolve_command_args_internal(&theme, &["run".into(), "fethc".into()], false).unwrap();
         assert_eq!(res, Some(vec!["run".to_string(), "fetch".to_string()]));
+    }
+
+    #[test]
+    fn test_find_matching_apps() {
+        let installed = vec![
+            "Safari".to_string(),
+            "WhatsApp".to_string(),
+            "Visual Studio Code".to_string(),
+            "Google Chrome".to_string(),
+        ];
+
+        // Prefix match: What -> WhatsApp
+        assert_eq!(find_matching_apps("What", &installed), vec!["WhatsApp"]);
+
+        // Case-insensitive exact match
+        assert_eq!(find_matching_apps("safari", &installed), vec!["Safari"]);
+
+        // Substring match: Code -> Visual Studio Code
+        assert_eq!(find_matching_apps("Code", &installed), vec!["Visual Studio Code"]);
+
+        // Typo match (Levenshtein distance <= 3): whasap -> WhatsApp
+        assert_eq!(find_matching_apps("whasap", &installed), vec!["WhatsApp"]);
     }
 }
