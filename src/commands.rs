@@ -2472,13 +2472,16 @@ pub fn handle_config(
                 "default_ide" | "ide" => {
                     println!("{}", cfg.default_ide.unwrap_or_else(|| "ask".into()))
                 }
+                "search_engine" | "engine" => {
+                    println!("{}", cfg.search_engine.unwrap_or_else(|| "google".into()))
+                }
                 "custom_hubs" | "hubs" => {
                     for h in cfg.custom_hubs.unwrap_or_default() {
                         println!("{}", h.display());
                     }
                 }
                 other => bail!(
-                    "unknown configuration key '{other}'. Valid keys: primary_color, auto_clear, compact_mode, default_ide, custom_hubs"
+                    "unknown configuration key '{other}'. Valid keys: primary_color, auto_clear, compact_mode, default_ide, search_engine, custom_hubs"
                 ),
             }
         }
@@ -2514,6 +2517,11 @@ pub fn handle_config(
                     config::save_config(&cfg)?;
                     println!("{} Set default_ide to '{}'", "✔".green().bold(), val_str);
                 }
+                "search_engine" | "engine" => {
+                    cfg.search_engine = Some(val_str.to_lowercase());
+                    config::save_config(&cfg)?;
+                    println!("{} Set search_engine to '{}'", "✔".green().bold(), val_str.to_lowercase());
+                }
                 "custom_hubs" | "hubs" => {
                     let mut hubs = cfg.custom_hubs.unwrap_or_default();
                     hubs.push(PathBuf::from(val_str));
@@ -2522,7 +2530,7 @@ pub fn handle_config(
                     println!("{} Added '{}' to custom_hubs", "✔".green().bold(), val_str);
                 }
                 other => bail!(
-                    "unknown configuration key '{other}'. Valid keys: primary_color, auto_clear, compact_mode, default_ide, custom_hubs"
+                    "unknown configuration key '{other}'. Valid keys: primary_color, auto_clear, compact_mode, default_ide, search_engine, custom_hubs"
                 ),
             }
         }
@@ -2597,6 +2605,10 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
         "{} directory hubs registered",
         cfg.custom_hubs.as_ref().map(|h| h.len()).unwrap_or(0)
     );
+    let engine_str = cfg
+        .search_engine
+        .clone()
+        .unwrap_or_else(|| "google".to_string());
     let config_file_path = config::config_path()
         .map(|p| {
             let s = p.to_string_lossy().to_string();
@@ -2614,6 +2626,7 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
         &[
             ("Primary Color", swatch),
             ("Default Editor", ide_str),
+            ("Search Engine", engine_str),
             ("Auto Clear", auto_clear_str),
             ("Compact Mode", compact_mode_str),
             ("Custom Hubs", hubs_count),
@@ -2625,11 +2638,12 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
     let options = [
         "🎨 1. Change Primary Color (Palette or Custom HEX)",
         "🖥️  2. Set Default Project Editor / IDE",
-        "🧹 3. Toggle Auto-Clear Terminal Screen",
-        "🗜️  4. Toggle Compact Mode (Minimalist Banner & Layout)",
-        "📁 5. Add Custom Workspace Project Hub",
-        "📝 6. Open config.toml in Editor",
-        "🔄 7. Reset Configuration to Factory Defaults",
+        "🔍 3. Set Default Web Search Engine (Google, DuckDuckGo, Brave, etc.)",
+        "🧹 4. Toggle Auto-Clear Terminal Screen",
+        "🗜️  5. Toggle Compact Mode (Minimalist Banner & Layout)",
+        "📁 6. Add Custom Workspace Project Hub",
+        "📝 7. Open config.toml in Editor",
+        "🔄 8. Reset Configuration to Factory Defaults",
         &cancel_btn,
     ];
 
@@ -2747,6 +2761,49 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
             );
         }
         2 => {
+            // Default Search Engine picker
+            let cancel_e = cancel_option();
+            let engine_choices = [
+                "Google (google - default)",
+                "DuckDuckGo (duckduckgo)",
+                "Brave Search (brave)",
+                "Perplexity AI (perplexity)",
+                "Bing (bing)",
+                "Kagi (kagi)",
+                &cancel_e,
+            ];
+
+            let eng_sel = Select::with_theme(theme)
+                .with_prompt("Select default web search engine")
+                .items(&engine_choices)
+                .default(0)
+                .interact()?;
+
+            let mut new_cfg = config::load_config();
+            match eng_sel {
+                0 => new_cfg.search_engine = Some("google".to_string()),
+                1 => new_cfg.search_engine = Some("duckduckgo".to_string()),
+                2 => new_cfg.search_engine = Some("brave".to_string()),
+                3 => new_cfg.search_engine = Some("perplexity".to_string()),
+                4 => new_cfg.search_engine = Some("bing".to_string()),
+                5 => new_cfg.search_engine = Some("kagi".to_string()),
+                _ => {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+            }
+            config::save_config(&new_cfg)?;
+            println!(
+                "{}",
+                format!(
+                    "Default search engine updated to '{}'! 🔍",
+                    new_cfg.search_engine.unwrap()
+                )
+                .green()
+                .bold()
+            );
+        }
+        3 => {
             // Toggle auto_clear
             let mut new_cfg = config::load_config();
             let current = new_cfg.auto_clear.unwrap_or(false);
@@ -2758,7 +2815,7 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
                 println!("{}", "Auto-clear disabled. ⚪".yellow().bold());
             }
         }
-        3 => {
+        4 => {
             // Toggle compact_mode
             let mut new_cfg = config::load_config();
             let current = new_cfg.compact_mode.unwrap_or(false);
@@ -2770,7 +2827,7 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
                 println!("{}", "Compact mode disabled. ⚪".yellow().bold());
             }
         }
-        4 => {
+        5 => {
             // Add custom hub
             let hub_input: String = Input::with_theme(theme)
                 .with_prompt("Enter directory path to scan for projects (leave blank to cancel)")
@@ -2800,7 +2857,7 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
                 println!("Hub already registered in configuration.");
             }
         }
-        5 => {
+        6 => {
             let path = config::config_path()?;
             if !path.exists() {
                 let _ = config::load_config();
@@ -2808,7 +2865,7 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
             let _ = Command::new("open").arg(&path).status();
             println!("Opened config file in editor: {}", path.display());
         }
-        6 if Confirm::with_theme(theme)
+        7 if Confirm::with_theme(theme)
             .with_prompt("Reset configuration to factory defaults?")
             .default(false)
             .interact()? =>
@@ -4014,6 +4071,351 @@ pub fn handle_install(
         for stack in &stacks {
             execute_stack_install(theme, stack, &current_dir)?;
         }
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// 27. Universal Web Browser & Developer Search (`run browse`, `run web`, `run brw`)
+// ============================================================================
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchTarget {
+    Default,
+    Google,
+    DuckDuckGo,
+    GitHub,
+    StackOverflow,
+    Crates,
+    Npm,
+    Mdn,
+    Ai,
+}
+
+impl SearchTarget {
+    pub fn name(&self) -> &'static str {
+        match self {
+            SearchTarget::Default => "Web",
+            SearchTarget::Google => "Google",
+            SearchTarget::DuckDuckGo => "DuckDuckGo",
+            SearchTarget::GitHub => "GitHub",
+            SearchTarget::StackOverflow => "StackOverflow",
+            SearchTarget::Crates => "Crates.io",
+            SearchTarget::Npm => "npm",
+            SearchTarget::Mdn => "MDN Web Docs",
+            SearchTarget::Ai => "AI (Perplexity)",
+        }
+    }
+}
+
+pub fn url_encode(input: &str) -> String {
+    let mut encoded = String::with_capacity(input.len());
+    for b in input.bytes() {
+        match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(b as char);
+            }
+            b' ' => encoded.push('+'),
+            _ => {
+                use std::fmt::Write;
+                let _ = write!(encoded, "%{:02X}", b);
+            }
+        }
+    }
+    encoded
+}
+
+pub fn is_likely_url(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    if trimmed.contains(' ') {
+        return None;
+    }
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        return Some(trimmed.to_string());
+    }
+    if trimmed.starts_with("localhost") || trimmed.starts_with("127.0.0.1") {
+        return Some(format!("http://{trimmed}"));
+    }
+    let common_tlds = [
+        ".com", ".org", ".net", ".io", ".dev", ".app", ".co", ".id", ".ai",
+        ".me", ".xyz", ".cc", ".tv", ".sh", ".rs", ".so", ".to", ".info", ".edu", ".gov",
+    ];
+    let lower = trimmed.to_lowercase();
+    for tld in common_tlds {
+        if let Some(pos) = lower.find(tld) {
+            let after = &lower[pos + tld.len()..];
+            if after.is_empty()
+                || after.starts_with('/')
+                || after.starts_with('?')
+                || after.starts_with(':')
+            {
+                return Some(format!("https://{trimmed}"));
+            }
+        }
+    }
+    None
+}
+
+pub fn build_target_url(target: SearchTarget, query: &str) -> String {
+    let encoded = url_encode(query);
+    match target {
+        SearchTarget::Default => {
+            let cfg = config::load_config();
+            let engine = cfg
+                .search_engine
+                .as_deref()
+                .unwrap_or("google")
+                .to_lowercase();
+            match engine.as_str() {
+                "duckduckgo" | "ddg" => format!("https://duckduckgo.com/?q={encoded}"),
+                "brave" => format!("https://search.brave.com/search?q={encoded}"),
+                "bing" => format!("https://www.bing.com/search?q={encoded}"),
+                "kagi" => format!("https://kagi.com/search?q={encoded}"),
+                "perplexity" => format!("https://www.perplexity.ai/search?q={encoded}"),
+                _ => format!("https://www.google.com/search?q={encoded}"),
+            }
+        }
+        SearchTarget::Google => format!("https://www.google.com/search?q={encoded}"),
+        SearchTarget::DuckDuckGo => format!("https://duckduckgo.com/?q={encoded}"),
+        SearchTarget::GitHub => {
+            if query.is_empty() {
+                "https://github.com".to_string()
+            } else {
+                format!("https://github.com/search?q={encoded}")
+            }
+        }
+        SearchTarget::StackOverflow => {
+            if query.is_empty() {
+                "https://stackoverflow.com".to_string()
+            } else {
+                format!("https://stackoverflow.com/search?q={encoded}")
+            }
+        }
+        SearchTarget::Crates => {
+            if query.is_empty() {
+                "https://crates.io".to_string()
+            } else {
+                format!("https://crates.io/search?q={encoded}")
+            }
+        }
+        SearchTarget::Npm => {
+            if query.is_empty() {
+                "https://www.npmjs.com".to_string()
+            } else {
+                format!("https://www.npmjs.com/search?q={encoded}")
+            }
+        }
+        SearchTarget::Mdn => {
+            if query.is_empty() {
+                "https://developer.mozilla.org".to_string()
+            } else {
+                format!("https://developer.mozilla.org/en-US/search?q={encoded}")
+            }
+        }
+        SearchTarget::Ai => {
+            if query.is_empty() {
+                "https://www.perplexity.ai".to_string()
+            } else {
+                format!("https://www.perplexity.ai/search?q={encoded}")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct BrowseFlags {
+    pub github: bool,
+    pub so: bool,
+    pub crates: bool,
+    pub npm: bool,
+    pub mdn: bool,
+    pub ai: bool,
+}
+
+pub fn handle_browse(
+    theme: &ColorfulTheme,
+    query_args: &[String],
+    flags: BrowseFlags,
+) -> Result<()> {
+    ui::maybe_auto_clear();
+
+    // 1. Determine target and query
+    let (mut target, mut raw_query) = if flags.github {
+        (SearchTarget::GitHub, query_args.join(" "))
+    } else if flags.so {
+        (SearchTarget::StackOverflow, query_args.join(" "))
+    } else if flags.crates {
+        (SearchTarget::Crates, query_args.join(" "))
+    } else if flags.npm {
+        (SearchTarget::Npm, query_args.join(" "))
+    } else if flags.mdn {
+        (SearchTarget::Mdn, query_args.join(" "))
+    } else if flags.ai {
+        (SearchTarget::Ai, query_args.join(" "))
+    } else if let Some(first) = query_args.first() {
+        let lower = first.to_lowercase();
+        match lower.as_str() {
+            "!gh" | "gh" | "github" => (SearchTarget::GitHub, query_args[1..].join(" ")),
+            "!so" | "so" | "stackoverflow" => {
+                (SearchTarget::StackOverflow, query_args[1..].join(" "))
+            }
+            "!crate" | "!c" | "crate" | "crates" => {
+                (SearchTarget::Crates, query_args[1..].join(" "))
+            }
+            "!npm" | "npm" => (SearchTarget::Npm, query_args[1..].join(" ")),
+            "!mdn" | "mdn" => (SearchTarget::Mdn, query_args[1..].join(" ")),
+            "!ai" | "ai" | "perplexity" => (SearchTarget::Ai, query_args[1..].join(" ")),
+            "!ddg" | "ddg" | "duckduckgo" => {
+                (SearchTarget::DuckDuckGo, query_args[1..].join(" "))
+            }
+            "!g" | "google" => (SearchTarget::Google, query_args[1..].join(" ")),
+            _ => (SearchTarget::Default, query_args.join(" ")),
+        }
+    } else {
+        (SearchTarget::Default, String::new())
+    };
+
+    // 2. Handle zero arguments or empty query
+    if raw_query.trim().is_empty() {
+        let clip_text = crate::mac::read_from_clipboard()
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+
+        if std::io::stdin().is_terminal() {
+            ui::print_banner();
+            ui::render_breadcrumbs(&["run", "Browse & Web Search"]);
+
+            let cancel_btn = ui::cancel_option();
+            let mut options = Vec::new();
+
+            let clip_preview = if !clip_text.is_empty() {
+                let first_line = clip_text.lines().next().unwrap_or("").trim();
+                let truncated = if first_line.chars().count() > 50 {
+                    format!("{}...", first_line.chars().take(50).collect::<String>())
+                } else {
+                    first_line.to_string()
+                };
+                Some(truncated)
+            } else {
+                None
+            };
+
+            if let Some(ref prev) = clip_preview {
+                options.push(format!("📋 Search clipboard: \"{}\"", prev.bold()));
+            }
+            options.push("⌨️  Enter search query or URL...".to_string());
+            options.push("🐙 Search on GitHub".to_string());
+            options.push("📚 Search on StackOverflow".to_string());
+            options.push("🦀 Search crates.io (Rust)".to_string());
+            options.push("📦 Search npmjs.com (Node)".to_string());
+            options.push("📖 Search MDN Web Docs".to_string());
+            options.push("🤖 Ask AI (Perplexity)".to_string());
+            options.push(cancel_btn);
+
+            let sel = Select::with_theme(theme)
+                .with_prompt("Choose search action")
+                .items(&options)
+                .default(0)
+                .interact()?;
+
+            let offset = if clip_preview.is_some() { 1 } else { 0 };
+
+            if clip_preview.is_some() && sel == 0 {
+                raw_query = clip_text;
+            } else if sel == offset {
+                let input: String = Input::with_theme(theme)
+                    .with_prompt("Search query or URL (leave blank to cancel)")
+                    .allow_empty(true)
+                    .interact_text()?;
+                let trimmed = input.trim().to_string();
+                if trimmed.is_empty() {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+                raw_query = trimmed;
+            } else if sel == offset + 1 {
+                target = SearchTarget::GitHub;
+                let input: String = Input::with_theme(theme)
+                    .with_prompt("GitHub search query")
+                    .allow_empty(true)
+                    .interact_text()?;
+                raw_query = input.trim().to_string();
+            } else if sel == offset + 2 {
+                target = SearchTarget::StackOverflow;
+                let input: String = Input::with_theme(theme)
+                    .with_prompt("StackOverflow search query")
+                    .allow_empty(true)
+                    .interact_text()?;
+                raw_query = input.trim().to_string();
+            } else if sel == offset + 3 {
+                target = SearchTarget::Crates;
+                let input: String = Input::with_theme(theme)
+                    .with_prompt("Crates.io search query")
+                    .allow_empty(true)
+                    .interact_text()?;
+                raw_query = input.trim().to_string();
+            } else if sel == offset + 4 {
+                target = SearchTarget::Npm;
+                let input: String = Input::with_theme(theme)
+                    .with_prompt("npm search query")
+                    .allow_empty(true)
+                    .interact_text()?;
+                raw_query = input.trim().to_string();
+            } else if sel == offset + 5 {
+                target = SearchTarget::Mdn;
+                let input: String = Input::with_theme(theme)
+                    .with_prompt("MDN search query")
+                    .allow_empty(true)
+                    .interact_text()?;
+                raw_query = input.trim().to_string();
+            } else if sel == offset + 6 {
+                target = SearchTarget::Ai;
+                let input: String = Input::with_theme(theme)
+                    .with_prompt("AI search query or question")
+                    .allow_empty(true)
+                    .interact_text()?;
+                raw_query = input.trim().to_string();
+            } else {
+                println!("Cancelled.");
+                return Ok(());
+            }
+        } else if !clip_text.is_empty() {
+            raw_query = clip_text;
+        } else {
+            bail!("no search query or URL provided (usage: run browse <query> or run web <query>)");
+        }
+    }
+
+    // 3. Direct URL handling
+    if target == SearchTarget::Default
+        && let Some(direct_url) = is_likely_url(&raw_query)
+    {
+        println!(
+            "{} Opening URL in default browser: {}",
+            "🌐".bold(),
+            direct_url.cyan()
+        );
+        let status = Command::new("open").arg(&direct_url).status()?;
+        if !status.success() {
+            bail!("failed to open URL '{direct_url}'");
+        }
+        return Ok(());
+    }
+
+    // 4. Build search engine URL and open
+    let final_url = build_target_url(target, &raw_query);
+    println!(
+        "{} Searching {} for: {}",
+        "🔍".bold(),
+        target.name().green().bold(),
+        raw_query.cyan()
+    );
+
+    let status = Command::new("open").arg(&final_url).status()?;
+    if !status.success() {
+        bail!("failed to launch browser for '{final_url}'");
     }
 
     Ok(())

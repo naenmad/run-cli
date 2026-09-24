@@ -16,6 +16,8 @@ pub struct RunConfig {
     pub compact_mode: Option<bool>,
     /// Preferred default editor: "antigravity", "cursor", "vscode", "xcode", "terminal", or "ask"
     pub default_ide: Option<String>,
+    /// Default search engine: "google" (default), "duckduckgo", "brave", "bing", "kagi", "perplexity"
+    pub search_engine: Option<String>,
     /// Additional custom directory paths to scan for projects
     pub custom_hubs: Option<Vec<PathBuf>>,
     /// Custom command shortcuts / aliases
@@ -61,6 +63,10 @@ compact_mode = false
 # Default editor to open projects directly without prompting:
 # Options: "antigravity", "cursor", "vscode", "xcode", "terminal", "ask" (default)
 default_ide = "ask"
+
+# Default web search engine for `run browse` / `run web`:
+# Options: "google" (default), "duckduckgo", "brave", "bing", "kagi", "perplexity"
+search_engine = "google"
 
 # Additional custom directory hubs to scan for projects in `run project`:
 custom_hubs = [

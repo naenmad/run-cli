@@ -546,6 +546,38 @@ enum Commands {
         dev: bool,
     },
 
+    /// Search the web or open URLs directly in your default browser
+    #[command(name = "browse", alias = "brw", alias = "web", alias = "surf", alias = "google")]
+    Browse {
+        /// Search query or URL to open (can be multiple words)
+        #[arg(num_args = 0..)]
+        query: Vec<String>,
+
+        /// Search directly on GitHub
+        #[arg(short = 'g', long = "github")]
+        github: bool,
+
+        /// Search directly on StackOverflow
+        #[arg(short = 's', long = "so")]
+        so: bool,
+
+        /// Search crates.io (Rust packages)
+        #[arg(short = 'c', long = "crate")]
+        crates: bool,
+
+        /// Search npmjs.com (Node packages)
+        #[arg(short = 'n', long = "npm")]
+        npm: bool,
+
+        /// Search MDN Web Docs
+        #[arg(short = 'm', long = "mdn")]
+        mdn: bool,
+
+        /// Search or ask AI (Perplexity)
+        #[arg(short = 'a', long = "ai")]
+        ai: bool,
+    },
+
     /// Display complete command reference and usage tutorial
     #[command(name = "help", alias = "doc", alias = "guide")]
     Help {
@@ -995,6 +1027,12 @@ const ALL_COMMANDS: &[CommandInfo] = &[
         description: "Auto-detect stack and install dependencies or add packages",
     },
     CommandInfo {
+        name: "browse",
+        alias_3: "brw",
+        aliases: &["brw", "web", "surf", "google"],
+        description: "Search the web or open URLs in your default browser",
+    },
+    CommandInfo {
         name: "help",
         alias_3: "doc",
         aliases: &["doc", "guide"],
@@ -1257,7 +1295,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .filter(|c| {
                 [
                     "project", "dev", "build", "test", "clean", "sync", "network", "share",
-                    "bench", "docker", "secret", "config", "alias", "stats", "update", "uuid", "pass", "timer", "install",
+                    "bench", "docker", "secret", "config", "alias", "stats", "update", "uuid", "pass", "timer", "install", "browse",
                 ]
                 .contains(&c.name)
             })
@@ -1302,7 +1340,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .filter(|c| {
                 [
                     "wifi", "bluetooth", "airpods", "airdrop", "port", "fetch", "ping", "pack",
-                    "unpack", "speedtest", "notify", "shot", "completion", "qr", "dns", "uuid", "pass",
+                    "unpack", "speedtest", "notify", "shot", "completion", "qr", "dns", "uuid", "pass", "browse",
                 ]
                 .contains(&c.name)
             })
@@ -1461,6 +1499,26 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
         Commands::Install { package, dev } => {
             commands::handle_install(theme, package.as_deref(), dev)
         }
+        Commands::Browse {
+            query,
+            github,
+            so,
+            crates,
+            npm,
+            mdn,
+            ai,
+        } => commands::handle_browse(
+            theme,
+            &query,
+            commands::BrowseFlags {
+                github,
+                so,
+                crates,
+                npm,
+                mdn,
+                ai,
+            },
+        ),
         Commands::Help { command } => handle_help(command.as_deref()),
     }
 }
@@ -1560,6 +1618,7 @@ fn run_app() -> Result<()> {
                 Commands::Update => "update",
                 Commands::Voice { .. } => "voice",
                 Commands::Install { .. } => "install",
+                Commands::Browse { .. } => "browse",
                 Commands::Help { .. } => "help",
             };
             config::record_command_stat(cmd_name);
@@ -3679,6 +3738,35 @@ fn print_command_detail(cmd: &str) {
             println!("  2. Text prompts: Press Enter on blank input to cancel.");
             println!("  3. Delete prompts: Enter 'n' or press Enter (default No) to cancel.");
         }
+        "install" | "ins" | "deps" | "setup" | "i" => {
+            println!(
+                "{} install (aliases: ins, deps, setup, i)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Smart multi-stack dependency installer and package adder.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run install               Auto-detect stack & lockfile and install dependencies");
+            println!("  run ins                   3-letter alias");
+            println!("  run ins <package>         Add dependency to detected project stack");
+            println!("  run ins <package> -D      Add as development dependency");
+        }
+        "browse" | "brw" | "web" | "surf" | "google" => {
+            println!(
+                "{} browse (aliases: brw, web, surf, google)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Search the web or open URLs directly in your default browser.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run web <query>           Search the web with default engine (Google/DDG)");
+            println!("  run web localhost:3000    Open URL or localhost directly");
+            println!("  run web gh <query>        Search directly on GitHub");
+            println!("  run web so <query>        Search directly on StackOverflow");
+            println!("  run web crate <query>     Search crates.io for Rust packages");
+            println!("  run web npm <query>       Search npmjs.com for Node packages");
+            println!("  run web mdn <query>       Search MDN Web Docs");
+            println!("  run web ai <query>        Ask AI (Perplexity)");
+            println!("  run web                   Search clipboard text or enter prompt");
+        }
         other => {
             println!("No dedicated topic found for '{}'.", other);
             print_main_help();
@@ -4562,6 +4650,69 @@ mod tests {
                 command: Some(Commands::Install { ref package, dev: true })
             }) if package.as_deref() == Some("tokio")
         ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "browse", "rust", "traits"]),
+            Ok(Cli {
+                command: Some(Commands::Browse { ref query, .. })
+            }) if query == &["rust", "traits"]
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "web", "localhost:3000"]),
+            Ok(Cli {
+                command: Some(Commands::Browse { ref query, .. })
+            }) if query == &["localhost:3000"]
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "brw", "gh", "run-cli"]),
+            Ok(Cli {
+                command: Some(Commands::Browse { ref query, github: false, .. })
+            }) if query == &["gh", "run-cli"]
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "google", "tokio", "--ai"]),
+            Ok(Cli {
+                command: Some(Commands::Browse { ref query, ai: true, .. })
+            }) if query == &["tokio"]
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "surf", "-s", "error[E0382]"]),
+            Ok(Cli {
+                command: Some(Commands::Browse { ref query, so: true, .. })
+            }) if query == &["error[E0382]"]
+        ));
+    }
+
+    #[test]
+    fn test_url_and_browse_helpers() {
+        assert_eq!(commands::url_encode("hello world"), "hello+world");
+        assert_eq!(commands::url_encode("foo&bar=baz?"), "foo%26bar%3Dbaz%3F");
+
+        assert_eq!(
+            commands::is_likely_url("localhost:3000"),
+            Some("http://localhost:3000".to_string())
+        );
+        assert_eq!(
+            commands::is_likely_url("127.0.0.1:8080"),
+            Some("http://127.0.0.1:8080".to_string())
+        );
+        assert_eq!(
+            commands::is_likely_url("https://github.com"),
+            Some("https://github.com".to_string())
+        );
+        assert_eq!(
+            commands::is_likely_url("github.com/naenmad/run-cli"),
+            Some("https://github.com/naenmad/run-cli".to_string())
+        );
+        assert_eq!(
+            commands::is_likely_url("crates.io"),
+            Some("https://crates.io".to_string())
+        );
+        assert_eq!(commands::is_likely_url("how to fix rust error"), None);
     }
 
     #[test]

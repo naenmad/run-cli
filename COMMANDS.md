@@ -4,7 +4,7 @@
 
 ---
 
-## Command Reference Matrix (69 Commands)
+## Command Reference Matrix (70 Commands)
 
 ### 🍏 macOS Native Interaction Suite
 
@@ -35,6 +35,7 @@
 
 | Semantic Command | 3-Letter Alias | Additional Aliases | Purpose |
 | :--- | :--- | :--- | :--- |
+| `browse` | `brw` | `web`, `surf`, `google` | Search web or open URLs in default browser with dev bangs (`run web`, `run web gh nextjs`, `run web localhost:3000`) |
 | `install` | `ins` | `deps`, `setup`, `i` | Auto-detect stack & lockfiles to install dependencies or add packages (`run ins`, `run i pkg -D`) |
 | `project` | `prj` | - | Scan workspace hubs and launch in Antigravity, VS Code, Cursor, Xcode, or terminal |
 | `dev` | `dev` | `develop` | Auto-detect stack (Rust, Node, Flutter, Go) and start development server |
@@ -154,6 +155,17 @@ run ins express
 run ins react -D           # Add as dev dependency
 run ins tokio --dev        # Add dev dependency in Cargo.toml
 run i pytest -D            # Python development requirement
+
+# Search the web, developer hubs, or open URLs in your default browser:
+run web rust iter map vs filter_map
+run web localhost:3000     # Open local dev server or URLs directly
+run web gh nextjs          # Search directly on GitHub
+run web so borrow checker  # Search directly on StackOverflow
+run web crate serde        # Search crates.io for Rust crates
+run web npm tailwindcss    # Search npmjs.com for Node packages
+run web mdn flexbox        # Search MDN Web Docs
+run web ai "how to optimize rust cli"  # Ask AI (Perplexity)
+run web                    # Auto-detects clipboard error or presents interactive menu
 
 # Run the active project's dev server:
 run dev

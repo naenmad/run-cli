@@ -123,7 +123,7 @@ custom_hubs = [
 
 ## 🎯 Command Cheatsheet
 
-`run` includes **69 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
+`run` includes **70 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
 
 ### 🍏 macOS Native Interaction Suite (Dual-Mode: Direct & Interactive)
 | Command | Alias | Additional Aliases | Purpose & Highlights |
@@ -152,6 +152,7 @@ custom_hubs = [
 ### 🛠️ Developer & Workspace Suite
 | Command | Alias | Purpose & Highlights |
 | :--- | :--- | :--- |
+| `browse` | `brw`, `web`, `surf`, `google` | Search web or open URLs in default browser with dev bangs (`run web`, `run web gh nextjs`, `run web localhost:3000`) |
 | `install` | `ins`, `deps`, `setup`, `i` | Auto-detect stack & lockfile to install dependencies, or add packages (`run ins`, `run i express -D`) |
 | `project` | `prj` | Scan project directories & open in **Antigravity**, **VS Code**, **Cursor**, **Xcode**, or terminal |
 | `dev` | `dev` | Auto-detects project stack (`cargo`, `npm`, `pnpm`, `flutter`, `go`) and starts dev server |
