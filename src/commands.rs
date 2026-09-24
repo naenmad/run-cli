@@ -3568,3 +3568,454 @@ pub fn handle_update(_theme: &ColorfulTheme) -> Result<()> {
     Ok(())
 }
 
+// ============================================================================
+// Multi-Stack Dependency Installer & Package Adder (`run install`, `run ins`)
+// ============================================================================
+
+#[derive(Debug, Clone)]
+enum ProjectStack {
+    Node { runner: String, lockfile: Option<String> },
+    Python { runner: String, manifest: String, has_venv: bool },
+    Rust,
+    Flutter { runner: String },
+    Go,
+    Php,
+    Ruby,
+}
+
+impl ProjectStack {
+    fn name(&self) -> &str {
+        match self {
+            ProjectStack::Node { .. } => "Node.js",
+            ProjectStack::Python { .. } => "Python",
+            ProjectStack::Rust => "Rust",
+            ProjectStack::Flutter { .. } => "Flutter / Dart",
+            ProjectStack::Go => "Go",
+            ProjectStack::Php => "PHP",
+            ProjectStack::Ruby => "Ruby",
+        }
+    }
+
+    fn detail(&self) -> String {
+        match self {
+            ProjectStack::Node { runner, lockfile } => {
+                if let Some(lock) = lockfile {
+                    format!("{runner} ({lock})")
+                } else {
+                    format!("{runner} (package.json)")
+                }
+            }
+            ProjectStack::Python { runner, manifest, has_venv } => {
+                let venv_status = if *has_venv { "in .venv" } else { "no venv" };
+                format!("{runner} ({manifest}, {venv_status})")
+            }
+            ProjectStack::Rust => "cargo (Cargo.toml)".to_string(),
+            ProjectStack::Flutter { runner } => format!("{runner} (pubspec.yaml)"),
+            ProjectStack::Go => "go (go.mod)".to_string(),
+            ProjectStack::Php => "composer (composer.json)".to_string(),
+            ProjectStack::Ruby => "bundle (Gemfile)".to_string(),
+        }
+    }
+}
+
+fn detect_project_stacks(dir: &std::path::Path) -> Vec<ProjectStack> {
+    let mut stacks = Vec::new();
+
+    // 1. Node.js
+    if dir.join("package.json").exists() {
+        let (runner, lockfile) = if dir.join("pnpm-lock.yaml").exists() {
+            ("pnpm".to_string(), Some("pnpm-lock.yaml".to_string()))
+        } else if dir.join("yarn.lock").exists() {
+            ("yarn".to_string(), Some("yarn.lock".to_string()))
+        } else if dir.join("bun.lockb").exists() || dir.join("bun.lock").exists() {
+            ("bun".to_string(), Some("bun.lock".to_string()))
+        } else if dir.join("package-lock.json").exists() {
+            ("npm".to_string(), Some("package-lock.json".to_string()))
+        } else {
+            ("npm".to_string(), None)
+        };
+        stacks.push(ProjectStack::Node { runner, lockfile });
+    }
+
+    // 2. Python
+    let py_has_poetry = dir.join("poetry.lock").exists()
+        || (dir.join("pyproject.toml").exists()
+            && fs::read_to_string(dir.join("pyproject.toml"))
+                .map(|s| s.contains("[tool.poetry]"))
+                .unwrap_or(false));
+    let py_has_pipenv = dir.join("Pipfile").exists();
+    let py_has_reqs = dir.join("requirements.txt").exists() || dir.join("requirements-dev.txt").exists();
+    let py_has_pyproject = dir.join("pyproject.toml").exists();
+    let py_has_venv = dir.join(".venv").exists() || dir.join("venv").exists();
+
+    if py_has_poetry {
+        stacks.push(ProjectStack::Python {
+            runner: "poetry".to_string(),
+            manifest: "poetry.lock".to_string(),
+            has_venv: py_has_venv,
+        });
+    } else if py_has_pipenv {
+        stacks.push(ProjectStack::Python {
+            runner: "pipenv".to_string(),
+            manifest: "Pipfile".to_string(),
+            has_venv: py_has_venv,
+        });
+    } else if py_has_reqs || py_has_pyproject {
+        let manifest = if py_has_reqs { "requirements.txt" } else { "pyproject.toml" };
+        let has_uv = Command::new("which").arg("uv").output().map(|o| o.status.success()).unwrap_or(false);
+        let runner = if has_uv { "uv" } else { "pip" }.to_string();
+        stacks.push(ProjectStack::Python {
+            runner,
+            manifest: manifest.to_string(),
+            has_venv: py_has_venv,
+        });
+    }
+
+    // 3. Rust
+    if dir.join("Cargo.toml").exists() {
+        stacks.push(ProjectStack::Rust);
+    }
+
+    // 4. Flutter / Dart
+    if dir.join("pubspec.yaml").exists() {
+        let has_flutter = Command::new("which").arg("flutter").output().map(|o| o.status.success()).unwrap_or(false);
+        let runner = if has_flutter { "flutter" } else { "dart" }.to_string();
+        stacks.push(ProjectStack::Flutter { runner });
+    }
+
+    // 5. Go
+    if dir.join("go.mod").exists() {
+        stacks.push(ProjectStack::Go);
+    }
+
+    // 6. PHP
+    if dir.join("composer.json").exists() {
+        stacks.push(ProjectStack::Php);
+    }
+
+    // 7. Ruby
+    if dir.join("Gemfile").exists() {
+        stacks.push(ProjectStack::Ruby);
+    }
+
+    stacks
+}
+
+fn execute_stack_install(theme: &ColorfulTheme, stack: &ProjectStack, dir: &std::path::Path) -> Result<()> {
+    match stack {
+        ProjectStack::Node { runner, lockfile } => {
+            let desc = lockfile.as_deref().unwrap_or("package.json");
+            println!("{} Installing Node.js dependencies using {} ({desc})...", "📦".bold(), runner.cyan().bold());
+            let status = Command::new(runner).arg("install").current_dir(dir).status()
+                .with_context(|| format!("failed to execute '{runner} install'"))?;
+            if !status.success() {
+                bail!("'{runner} install' exited with non-zero code");
+            }
+            println!("{} Node.js dependencies installed successfully!", "✔".green().bold());
+        }
+        ProjectStack::Python { runner, manifest, has_venv } => {
+            let mut venv_created = *has_venv;
+            if !*has_venv && runner != "poetry" && runner != "pipenv" && std::io::stdin().is_terminal() {
+                let confirm = Confirm::with_theme(theme)
+                    .with_prompt("No Python virtual environment (.venv) found. Create one now?")
+                    .default(true)
+                    .interact()?;
+                if confirm {
+                    println!("{} Creating virtual environment in .venv...", "🐍".bold());
+                    let _ = Command::new("python3").args(["-m", "venv", ".venv"]).current_dir(dir).status();
+                    println!("{} Created .venv.", "✔".green().bold());
+                    venv_created = true;
+                }
+            }
+
+            println!("{} Installing Python dependencies using {} ({manifest})...", "🐍".bold(), runner.cyan().bold());
+
+            let status = if runner == "poetry" {
+                Command::new("poetry").arg("install").current_dir(dir).status()?
+            } else if runner == "pipenv" {
+                Command::new("pipenv").arg("install").current_dir(dir).status()?
+            } else if runner == "uv" {
+                if dir.join("requirements.txt").exists() {
+                    if venv_created && dir.join(".venv/bin/python").exists() {
+                        Command::new("uv").args(["pip", "install", "-r", "requirements.txt", "--python", ".venv/bin/python"]).current_dir(dir).status()?
+                    } else {
+                        Command::new("uv").args(["pip", "install", "-r", "requirements.txt"]).current_dir(dir).status()?
+                    }
+                } else {
+                    Command::new("uv").arg("sync").current_dir(dir).status()?
+                }
+            } else {
+                let pip_bin = if venv_created && dir.join(".venv/bin/pip").exists() {
+                    ".venv/bin/pip"
+                } else if dir.join("venv/bin/pip").exists() {
+                    "venv/bin/pip"
+                } else {
+                    "pip3"
+                };
+                if dir.join("requirements.txt").exists() {
+                    Command::new(pip_bin).args(["install", "-r", "requirements.txt"]).current_dir(dir).status()?
+                } else if dir.join("requirements-dev.txt").exists() {
+                    Command::new(pip_bin).args(["install", "-r", "requirements-dev.txt"]).current_dir(dir).status()?
+                } else {
+                    Command::new(pip_bin).args(["install", "-e", "."]).current_dir(dir).status()?
+                }
+            };
+
+            if !status.success() {
+                bail!("Python dependency installation exited with error");
+            }
+            println!("{} Python dependencies installed successfully!", "✔".green().bold());
+        }
+        ProjectStack::Rust => {
+            println!("{} Fetching and checking Rust crate dependencies...", "🦀".bold());
+            let status = Command::new("cargo").arg("check").current_dir(dir).status()?;
+            if !status.success() {
+                bail!("'cargo check' exited with non-zero code");
+            }
+            println!("{} Rust crate dependencies resolved and checked!", "✔".green().bold());
+        }
+        ProjectStack::Flutter { runner } => {
+            println!("{} Getting Flutter / Dart packages...", "📱".bold());
+            let status = Command::new(runner).args(["pub", "get"]).current_dir(dir).status()?;
+            if !status.success() {
+                bail!("'{runner} pub get' exited with non-zero code");
+            }
+            println!("{} Flutter / Dart packages downloaded successfully!", "✔".green().bold());
+        }
+        ProjectStack::Go => {
+            println!("{} Downloading and tidying Go modules...", "🐹".bold());
+            let _ = Command::new("go").args(["mod", "download"]).current_dir(dir).status();
+            let status = Command::new("go").args(["mod", "tidy"]).current_dir(dir).status()?;
+            if !status.success() {
+                bail!("'go mod tidy' exited with non-zero code");
+            }
+            println!("{} Go modules downloaded and tidied!", "✔".green().bold());
+        }
+        ProjectStack::Php => {
+            println!("{} Installing Composer dependencies...", "🐘".bold());
+            let status = Command::new("composer").arg("install").current_dir(dir).status()?;
+            if !status.success() {
+                bail!("'composer install' exited with non-zero code");
+            }
+            println!("{} Composer packages installed!", "✔".green().bold());
+        }
+        ProjectStack::Ruby => {
+            println!("{} Installing Bundler gems...", "💎".bold());
+            let status = Command::new("bundle").arg("install").current_dir(dir).status()?;
+            if !status.success() {
+                bail!("'bundle install' exited with non-zero code");
+            }
+            println!("{} Ruby gems installed!", "✔".green().bold());
+        }
+    }
+    Ok(())
+}
+
+fn execute_stack_add(stack: &ProjectStack, pkg: &str, is_dev: bool, dir: &std::path::Path) -> Result<()> {
+    match stack {
+        ProjectStack::Node { runner, .. } => {
+            println!("{} Adding '{pkg}' via {runner}...", "📦".bold(), runner = runner.cyan().bold());
+            let mut args = vec!["add"];
+            if is_dev {
+                if runner == "bun" {
+                    args.push("-d");
+                } else if runner == "npm" {
+                    args[0] = "install";
+                    args.push("--save-dev");
+                } else {
+                    args.push("-D");
+                }
+            }
+            args.push(pkg);
+            let status = Command::new(runner).args(&args).current_dir(dir).status()?;
+            if !status.success() {
+                bail!("failed to add package '{pkg}' using {runner}");
+            }
+            println!("{} Successfully added '{pkg}' to Node dependencies!", "✔".green().bold());
+        }
+        ProjectStack::Python { runner, has_venv, .. } => {
+            println!("{} Adding '{pkg}' via Python package manager...", "🐍".bold());
+            let status = if runner == "poetry" {
+                let mut args = vec!["add"];
+                if is_dev {
+                    args.push("--group");
+                    args.push("dev");
+                }
+                args.push(pkg);
+                Command::new("poetry").args(&args).current_dir(dir).status()?
+            } else if runner == "pipenv" {
+                let mut args = vec!["install"];
+                if is_dev {
+                    args.push("--dev");
+                }
+                args.push(pkg);
+                Command::new("pipenv").args(&args).current_dir(dir).status()?
+            } else if runner == "uv" {
+                let mut args = vec!["add"];
+                if is_dev {
+                    args.push("--dev");
+                }
+                args.push(pkg);
+                Command::new("uv").args(&args).current_dir(dir).status()?
+            } else {
+                let pip_bin = if *has_venv && dir.join(".venv/bin/pip").exists() {
+                    ".venv/bin/pip"
+                } else if dir.join("venv/bin/pip").exists() {
+                    "venv/bin/pip"
+                } else {
+                    "pip3"
+                };
+                Command::new(pip_bin).args(["install", pkg]).current_dir(dir).status()?
+            };
+
+            if !status.success() {
+                bail!("failed to add Python package '{pkg}'");
+            }
+            println!("{} Successfully added '{pkg}' to Python dependencies!", "✔".green().bold());
+        }
+        ProjectStack::Rust => {
+            println!("{} Adding '{pkg}' via cargo...", "🦀".bold());
+            let mut args = vec!["add"];
+            if is_dev {
+                args.push("--dev");
+            }
+            args.push(pkg);
+            let status = Command::new("cargo").args(&args).current_dir(dir).status()?;
+            if !status.success() {
+                bail!("'cargo add {pkg}' failed");
+            }
+            println!("{} Successfully added '{pkg}' to Cargo.toml!", "✔".green().bold());
+        }
+        ProjectStack::Flutter { runner } => {
+            println!("{} Adding '{pkg}' via {runner}...", "📱".bold());
+            let mut args = vec!["pub", "add"];
+            if is_dev {
+                args.push("--dev");
+            }
+            args.push(pkg);
+            let status = Command::new(runner).args(&args).current_dir(dir).status()?;
+            if !status.success() {
+                bail!("'{runner} pub add {pkg}' failed");
+            }
+            println!("{} Successfully added '{pkg}' to pubspec.yaml!", "✔".green().bold());
+        }
+        ProjectStack::Go => {
+            println!("{} Adding '{pkg}' via go get...", "🐹".bold());
+            let status = Command::new("go").args(["get", pkg]).current_dir(dir).status()?;
+            if !status.success() {
+                bail!("'go get {pkg}' failed");
+            }
+            let _ = Command::new("go").args(["mod", "tidy"]).current_dir(dir).status();
+            println!("{} Successfully added '{pkg}' to go.mod!", "✔".green().bold());
+        }
+        ProjectStack::Php => {
+            println!("{} Adding '{pkg}' via composer require...", "🐘".bold());
+            let mut args = vec!["require"];
+            if is_dev {
+                args.push("--dev");
+            }
+            args.push(pkg);
+            let status = Command::new("composer").args(&args).current_dir(dir).status()?;
+            if !status.success() {
+                bail!("'composer require {pkg}' failed");
+            }
+            println!("{} Successfully added '{pkg}' to composer.json!", "✔".green().bold());
+        }
+        ProjectStack::Ruby => {
+            println!("{} Adding '{pkg}' via bundle add...", "💎".bold());
+            let mut args = vec!["add"];
+            if is_dev {
+                args.push("--group");
+                args.push("development");
+            }
+            args.push(pkg);
+            let status = Command::new("bundle").args(&args).current_dir(dir).status()?;
+            if !status.success() {
+                bail!("'bundle add {pkg}' failed");
+            }
+            println!("{} Successfully added '{pkg}' to Gemfile!", "✔".green().bold());
+        }
+    }
+    Ok(())
+}
+
+pub fn handle_install(
+    theme: &ColorfulTheme,
+    package: Option<&str>,
+    is_dev: bool,
+) -> Result<()> {
+    ui::maybe_auto_clear();
+    let current_dir = std::env::current_dir().context("failed to read current working directory")?;
+    let stacks = detect_project_stacks(&current_dir);
+
+    if stacks.is_empty() {
+        bail!("no recognized project configuration found in current directory (e.g. package.json, requirements.txt, Cargo.toml, pubspec.yaml, go.mod)");
+    }
+
+    if let Some(pkg) = package {
+        let target_stack = if stacks.len() == 1 {
+            &stacks[0]
+        } else if std::io::stdin().is_terminal() {
+            let cancel_btn = ui::cancel_option();
+            let mut options: Vec<String> = stacks.iter().map(|s| format!("{:<14} ➔  {}", s.name().bold(), s.detail().dimmed())).collect();
+            options.push(cancel_btn);
+
+            let sel = Select::with_theme(theme)
+                .with_prompt(format!("Add '{pkg}' to which stack?"))
+                .items(&options)
+                .default(0)
+                .interact()?;
+
+            if sel >= stacks.len() {
+                println!("Cancelled.");
+                return Ok(());
+            }
+            &stacks[sel]
+        } else {
+            &stacks[0]
+        };
+
+        return execute_stack_add(target_stack, pkg, is_dev, &current_dir);
+    }
+
+    if stacks.len() == 1 {
+        return execute_stack_install(theme, &stacks[0], &current_dir);
+    }
+
+    if std::io::stdin().is_terminal() {
+        ui::print_banner();
+        ui::render_breadcrumbs(&["run", "Dependency Installer"]);
+
+        let cancel_btn = ui::cancel_option();
+        let mut options: Vec<String> = stacks
+            .iter()
+            .map(|s| format!("{:<14} ➔  {}", s.name().bold(), s.detail().dimmed()))
+            .collect();
+        options.push("🚀 Install All Detected Stacks".bold().to_string());
+        options.push(cancel_btn);
+
+        let sel = Select::with_theme(theme)
+            .with_prompt("Multiple stacks detected in workspace. Install which one?")
+            .items(&options)
+            .default(0)
+            .interact()?;
+
+        if sel < stacks.len() {
+            execute_stack_install(theme, &stacks[sel], &current_dir)?;
+        } else if sel == stacks.len() {
+            for stack in &stacks {
+                println!();
+                execute_stack_install(theme, stack, &current_dir)?;
+            }
+        } else {
+            println!("Cancelled.");
+        }
+    } else {
+        for stack in &stacks {
+            execute_stack_install(theme, stack, &current_dir)?;
+        }
+    }
+
+    Ok(())
+}
+

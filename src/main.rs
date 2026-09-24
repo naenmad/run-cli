@@ -536,6 +536,16 @@ enum Commands {
         voice: Option<String>,
     },
 
+    /// Smart multi-stack dependency installer and package adder (Node, Python, Rust, Flutter, Go)
+    #[command(name = "install", alias = "ins", alias = "deps", alias = "setup", alias = "i")]
+    Install {
+        /// Optional package name to add
+        package: Option<String>,
+        /// Install as development dependency
+        #[arg(short = 'D', long = "dev")]
+        dev: bool,
+    },
+
     /// Display complete command reference and usage tutorial
     #[command(name = "help", alias = "doc", alias = "guide")]
     Help {
@@ -979,6 +989,12 @@ const ALL_COMMANDS: &[CommandInfo] = &[
         description: "macOS Text-to-Speech synthesis with fun voices",
     },
     CommandInfo {
+        name: "install",
+        alias_3: "ins",
+        aliases: &["ins", "deps", "setup", "i"],
+        description: "Auto-detect stack and install dependencies or add packages",
+    },
+    CommandInfo {
         name: "help",
         alias_3: "doc",
         aliases: &["doc", "guide"],
@@ -1241,7 +1257,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .filter(|c| {
                 [
                     "project", "dev", "build", "test", "clean", "sync", "network", "share",
-                    "bench", "docker", "secret", "config", "alias", "stats", "update", "uuid", "pass", "timer",
+                    "bench", "docker", "secret", "config", "alias", "stats", "update", "uuid", "pass", "timer", "install",
                 ]
                 .contains(&c.name)
             })
@@ -1442,6 +1458,9 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
         Commands::Voice { text, voice } => {
             mac::handle_voice(theme, text.as_deref(), voice.as_deref())
         }
+        Commands::Install { package, dev } => {
+            commands::handle_install(theme, package.as_deref(), dev)
+        }
         Commands::Help { command } => handle_help(command.as_deref()),
     }
 }
@@ -1540,6 +1559,7 @@ fn run_app() -> Result<()> {
                 Commands::Qr { .. } => "qr",
                 Commands::Update => "update",
                 Commands::Voice { .. } => "voice",
+                Commands::Install { .. } => "install",
                 Commands::Help { .. } => "help",
             };
             config::record_command_stat(cmd_name);
@@ -4506,6 +4526,41 @@ mod tests {
             Ok(Cli {
                 command: Some(Commands::Voice { ref text, ref voice })
             }) if text.as_deref() == Some("Test") && voice.as_deref() == Some("Zarvox")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "install"]),
+            Ok(Cli {
+                command: Some(Commands::Install { package: None, dev: false })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "ins", "express", "-D"]),
+            Ok(Cli {
+                command: Some(Commands::Install { ref package, dev: true })
+            }) if package.as_deref() == Some("express")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "deps"]),
+            Ok(Cli {
+                command: Some(Commands::Install { package: None, dev: false })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "setup"]),
+            Ok(Cli {
+                command: Some(Commands::Install { package: None, dev: false })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "i", "tokio", "--dev"]),
+            Ok(Cli {
+                command: Some(Commands::Install { ref package, dev: true })
+            }) if package.as_deref() == Some("tokio")
         ));
     }
 

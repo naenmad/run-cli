@@ -4,7 +4,7 @@
 
 ---
 
-## Command Reference Matrix (68 Commands)
+## Command Reference Matrix (69 Commands)
 
 ### 🍏 macOS Native Interaction Suite
 
@@ -35,6 +35,7 @@
 
 | Semantic Command | 3-Letter Alias | Additional Aliases | Purpose |
 | :--- | :--- | :--- | :--- |
+| `install` | `ins` | `deps`, `setup`, `i` | Auto-detect stack & lockfiles to install dependencies or add packages (`run ins`, `run i pkg -D`) |
 | `project` | `prj` | - | Scan workspace hubs and launch in Antigravity, VS Code, Cursor, Xcode, or terminal |
 | `dev` | `dev` | `develop` | Auto-detect stack (Rust, Node, Flutter, Go) and start development server |
 | `build` | `bld` | - | Compile active project in release mode |
@@ -141,6 +142,18 @@
 run project
 # Or with 3-letter alias:
 run prj
+
+# Auto-detect stack, lockfile, or .venv and install all dependencies:
+run install
+run ins
+run deps
+run setup
+
+# Add a specific package to the detected stack (auto-dispatches to pnpm/yarn/bun/npm, pip, cargo, etc.):
+run ins express
+run ins react -D           # Add as dev dependency
+run ins tokio --dev        # Add dev dependency in Cargo.toml
+run i pytest -D            # Python development requirement
 
 # Run the active project's dev server:
 run dev
