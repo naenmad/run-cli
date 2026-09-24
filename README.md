@@ -123,12 +123,11 @@ custom_hubs = [
 
 ## 🎯 Command Cheatsheet
 
-`run` includes **71 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
+`run` includes **70 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
 
 ### 🍏 macOS Native Interaction Suite (Dual-Mode: Direct & Interactive)
 | Command | Alias | Additional Aliases | Purpose & Highlights |
 | :--- | :--- | :--- | :--- |
-| `raycast` | `ray` | - | Generate & install Raycast Script Commands for Cmd+Space launcher integration (`run ray`, `run ray list`, `run ray open`) |
 | `wifi` | `wif` | - | Manage Wi-Fi, scan nearby networks, connect, toggle power, or view Keychain passwords (`run wifi`, `run wif scan`, `run wif pass`) |
 | `bluetooth` | `blt` | `bt`, `blue` | Inspect Bluetooth controller state & connected peripherals (`run bt`, `run bt on`) |
 | `airpods` | `pod` | `pods` | One-click connect paired AirPods or Bluetooth headphones (`run pods`) |
