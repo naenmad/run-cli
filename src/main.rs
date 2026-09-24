@@ -578,6 +578,13 @@ enum Commands {
         ai: bool,
     },
 
+    /// Generate and manage Raycast Script Commands for Cmd+Space launcher integration
+    #[command(name = "raycast", alias = "ray")]
+    Raycast {
+        /// Optional action: "install", "list", "open"
+        action: Option<String>,
+    },
+
     /// Display complete command reference and usage tutorial
     #[command(name = "help", alias = "doc", alias = "guide")]
     Help {
@@ -1033,6 +1040,12 @@ const ALL_COMMANDS: &[CommandInfo] = &[
         description: "Search the web or open URLs in your default browser",
     },
     CommandInfo {
+        name: "raycast",
+        alias_3: "ray",
+        aliases: &["ray"],
+        description: "Generate and manage Raycast Cmd+Space script commands",
+    },
+    CommandInfo {
         name: "help",
         alias_3: "doc",
         aliases: &["doc", "guide"],
@@ -1295,7 +1308,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .filter(|c| {
                 [
                     "project", "dev", "build", "test", "clean", "sync", "network", "share",
-                    "bench", "docker", "secret", "config", "alias", "stats", "update", "uuid", "pass", "timer", "install", "browse",
+                    "bench", "docker", "secret", "config", "alias", "stats", "update", "uuid", "pass", "timer", "install", "browse", "raycast",
                 ]
                 .contains(&c.name)
             })
@@ -1307,7 +1320,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
                 [
                     "wifi", "bluetooth", "airpods", "airdrop", "music", "volume", "note",
                     "fixapp", "battery", "awake", "peek", "trash", "shot", "notify", "dark",
-                    "light", "lock", "desktop", "voice", "dns",
+                    "light", "lock", "desktop", "voice", "dns", "raycast",
                 ]
                 .contains(&c.name)
             })
@@ -1519,6 +1532,7 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
                 ai,
             },
         ),
+        Commands::Raycast { action } => commands::handle_raycast(theme, action.as_deref()),
         Commands::Help { command } => handle_help(command.as_deref()),
     }
 }
@@ -1619,6 +1633,7 @@ fn run_app() -> Result<()> {
                 Commands::Voice { .. } => "voice",
                 Commands::Install { .. } => "install",
                 Commands::Browse { .. } => "browse",
+                Commands::Raycast { .. } => "raycast",
                 Commands::Help { .. } => "help",
             };
             config::record_command_stat(cmd_name);
@@ -3767,6 +3782,18 @@ fn print_command_detail(cmd: &str) {
             println!("  run web ai <query>        Ask AI (Perplexity)");
             println!("  run web                   Search clipboard text or enter prompt");
         }
+        "raycast" | "ray" => {
+            println!(
+                "{} raycast (alias: ray)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Generate and manage Raycast Script Commands for Cmd+Space launcher.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run raycast               Install/update Raycast script commands");
+            println!("  run ray                   3-letter alias");
+            println!("  run ray list              List available Raycast commands");
+            println!("  run ray open              Open Raycast scripts directory in Finder");
+        }
         other => {
             println!("No dedicated topic found for '{}'.", other);
             print_main_help();
@@ -4684,6 +4711,20 @@ mod tests {
             Ok(Cli {
                 command: Some(Commands::Browse { ref query, so: true, .. })
             }) if query == &["error[E0382]"]
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "raycast"]),
+            Ok(Cli {
+                command: Some(Commands::Raycast { action: None })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "ray", "list"]),
+            Ok(Cli {
+                command: Some(Commands::Raycast { ref action })
+            }) if action.as_deref() == Some("list")
         ));
     }
 

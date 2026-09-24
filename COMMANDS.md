@@ -4,12 +4,13 @@
 
 ---
 
-## Command Reference Matrix (70 Commands)
+## Command Reference Matrix (71 Commands)
 
 ### 🍏 macOS Native Interaction Suite
 
 | Semantic Command | 3-Letter Alias | Additional Aliases | Purpose |
 | :--- | :--- | :--- | :--- |
+| `raycast` | `ray` | - | Generate & install Raycast Script Commands for Cmd+Space launcher integration |
 | `wifi` | `wif` | - | Manage Wi-Fi connections, scan networks, toggle power, show Keychain passwords |
 | `bluetooth` | `blt` | `bt`, `blue` | Inspect Bluetooth controller state & connected devices |
 | `airpods` | `pod` | `pods` | Quick connect paired AirPods or Bluetooth headphones |
@@ -593,6 +594,19 @@ run say "System online" --voice Zarvox
 # Interactive voice picker & text prompt:
 run voice
 run say
+```
+
+#### 17. Raycast Cmd+Space Launcher Integration (`run raycast`, `run ray`)
+```bash
+# Generate and install 12 Raycast Script Commands to ~/.config/run/raycast:
+run raycast
+run ray
+
+# List registered Raycast scripts:
+run ray list
+
+# Open Raycast scripts directory in Finder:
+run ray open
 ```
 
 ### 12. ⚡ Productivity Essentials (Timer, UUID, Pass, QR, Update)
