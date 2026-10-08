@@ -123,7 +123,7 @@ custom_hubs = [
 
 ## 🎯 Command Cheatsheet
 
-`run` includes **70 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
+`run` includes **77 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
 
 ### 🍏 macOS Native Interaction Suite (Dual-Mode: Direct & Interactive)
 | Command | Alias | Additional Aliases | Purpose & Highlights |
@@ -148,12 +148,18 @@ custom_hubs = [
 | `desktop` | `dkt` | `desk` | Hide or show desktop icons for clean presentations (`run desk hide`, `run desk show`) |
 | `dns` | `fls` | `flush` | Flush macOS DNS cache in 1 click (`dscacheutil` + `mDNSResponder`) (`run dns`) |
 | `voice` | `say` | `voc` | Native macOS Text-to-Speech synthesis with fun voices (`run voice "Hello"`, `run say "Hi" -v Zarvox`) |
+| `ocr` | `txt` | `vision`, `scan-text` | Extract text from screen selection or image file via Apple Neural Vision OCR (`run ocr`, `run txt`) |
 
 ### 🛠️ Developer & Workspace Suite
 | Command | Alias | Purpose & Highlights |
 | :--- | :--- | :--- |
 | `browse` | `brw`, `web`, `surf`, `google` | Search web or open URLs in default browser with dev bangs (`run web`, `run web gh nextjs`, `run web localhost:3000`) |
 | `install` | `ins`, `deps`, `setup`, `i` | Auto-detect stack & lockfile to install dependencies, or add packages (`run ins`, `run i express -D`) |
+| `color` | `hex`, `rgb`, `picker` | Color inspector, converter (HEX, RGB, HSL, Flutter), and macOS loupe eyedropper (`run color #3B82F6`, `run color --pick`) |
+| `img` | `pic`, `view`, `photo` | Render images directly inside terminal with 24-bit TrueColor ANSI half-blocks (`run img logo.png`) |
+| `encrypt` | `enc`, `crypt` | Encrypt files using military-grade authenticated AES-256-GCM and password (`run encrypt .env`) |
+| `decrypt` | `dec`, `uncrypt` | Decrypt files previously encrypted with `run encrypt` (`run decrypt .env.enc`) |
+| `mock` | `fak`, `fake`, `dummy` | Instant developer mock & dummy data generator in JSON/CSV (`run mock user 5`, `run mock product 10 --csv`) |
 | `project` | `prj` | Scan project directories & open in **Antigravity**, **VS Code**, **Cursor**, **Xcode**, or terminal |
 | `dev` | `dev` | Auto-detects project stack (`cargo`, `npm`, `pnpm`, `flutter`, `go`) and starts dev server |
 | `build` | `bld` | Compiles active project in release mode |
@@ -204,7 +210,8 @@ custom_hubs = [
 ### 🌐 Network & Archive
 | Command | Alias | Unix Alias | Purpose |
 | :--- | :--- | :--- | :--- |
-| `qr` | `qrc` | - | Render terminal visual Unicode QR code from text, URL, or clipboard (`run qr`) |
+| `qr` | `qrc` | - | Enhanced QR suite: terminal generator, PNG export, Wi-Fi share, Vision scan, and local drop (`run qr wifi`, `run qr scan`, `run qr -c`) |
+| `lan` | `rad` | `radar`, `subnet` | Scan local Wi-Fi / LAN network devices, IP addresses, and MACs via ARP (`run lan`, `run radar`) |
 | `speedtest` | `spd`, `speed` | `networkQuality` | Measure internet download, upload throughput and responsiveness |
 | `fetch` | `fch` | `curl`, `wget` | Fetch HTTP response headers/body or download files with progress bar |
 | `ping` | `png` | - | Test host latency with packet summary |

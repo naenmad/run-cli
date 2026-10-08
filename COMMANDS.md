@@ -4,7 +4,7 @@
 
 ---
 
-## Command Reference Matrix (70 Commands)
+## Command Reference Matrix (77 Commands)
 
 ### 🍏 macOS Native Interaction Suite
 
@@ -30,6 +30,7 @@
 | `desktop` | `dkt` | `desk` | Hide or show desktop icons for clean presentations |
 | `dns` | `fls` | `flush` | Flush macOS DNS cache in 1 click (`dscacheutil` + `mDNSResponder`) |
 | `voice` | `say` | `voc` | Native macOS Text-to-Speech synthesis with fun voices |
+| `ocr` | `txt` | `vision`, `scan-text` | Extract text from screen selection or image file via Apple Neural Vision OCR |
 
 ### 🛠️ Developer & Workspace Suite
 
@@ -37,6 +38,11 @@
 | :--- | :--- | :--- | :--- |
 | `browse` | `brw` | `web`, `surf`, `google` | Search web or open URLs in default browser with dev bangs (`run web`, `run web gh nextjs`, `run web localhost:3000`) |
 | `install` | `ins` | `deps`, `setup`, `i` | Auto-detect stack & lockfiles to install dependencies or add packages (`run ins`, `run i pkg -D`) |
+| `color` | `hex` | `rgb`, `picker` | Color inspector, converter (HEX, RGB, HSL, Flutter), and macOS magnifying loupe eyedropper |
+| `img` | `pic` | `view`, `photo` | Render images directly inside terminal with 24-bit TrueColor ANSI half-blocks |
+| `encrypt` | `enc` | `crypt` | Encrypt files using military-grade authenticated AES-256-GCM and password |
+| `decrypt` | `dec` | `uncrypt` | Decrypt files previously encrypted with `run encrypt` |
+| `mock` | `fak` | `fake`, `dummy` | Instant developer mock & dummy data generator (users, products) in JSON/CSV |
 | `project` | `prj` | - | Scan workspace hubs and launch in Antigravity, VS Code, Cursor, Xcode, or terminal |
 | `dev` | `dev` | `develop` | Auto-detect stack (Rust, Node, Flutter, Go) and start development server |
 | `build` | `bld` | - | Compile active project in release mode |
@@ -89,7 +95,8 @@
 
 | Semantic Command | 3-Letter Alias | Unix Aliases | Purpose |
 | :--- | :--- | :--- | :--- |
-| `qr` | `qrc` | - | Render terminal visual Unicode QR code from text, URL, or clipboard |
+| `qr` | `qrc` | - | Enhanced QR suite: terminal generator, PNG export, Wi-Fi share, Vision scan, and local drop |
+| `lan` | `rad` | `radar`, `subnet` | Scan local Wi-Fi / LAN network devices, IP addresses, and MACs via ARP |
 | `speedtest` | `spd` | `speed`, `networkQuality` | Measure internet download, upload throughput and responsiveness |
 | `port` | `prt` | `lsof` | Check active listening TCP ports and sockets |
 | `fetch` | `fch` | `curl`, `wget`, `get` | Fetch HTTP response or download file locally with progress bar |
@@ -626,15 +633,32 @@ run pas
 run pass
 ```
 
-#### 4. Terminal Visual QR Code Generator (`run qr`, `run qrc`)
+#### 4. Enhanced QR Code Suite (`run qr`, `run qrc`)
 ```bash
-# Generate visual Unicode QR code in terminal from direct URL or text:
+# Generate visual Unicode QR code in terminal:
 run qr https://github.com/naenmad/run-cli
-run qr "WIFI:S:MyNetwork;T:WPA;P:MySecret;;"
+run qr "Hello Antigravity!"
 
 # Automatically uses URL from clipboard if omitted, or prompts interactively:
 run qr
 run qrc
+
+# Export high-resolution QR code as PNG image file:
+run qr https://github.com -o qrcode.png
+
+# Copy QR code image directly to macOS clipboard (ready to paste in Figma, Slack, etc.):
+run qr "https://github.com" -c
+
+# Auto-detect active macOS Wi-Fi SSID and generate instant camera-scannable join QR:
+run qr wifi
+run qr wifi "Office-5G" "SecretPassword"
+
+# Scan and decode QR code from screen (launches crosshair selector) or image file:
+run qr scan
+run qr scan /path/to/qr_image.png
+
+# Ephemeral local Wi-Fi file sharing (starts micro-server & prints QR code for phones on the same Wi-Fi):
+run qr share document.pdf
 ```
 
 #### 5. One-Step System & Stack Updater (`run update`, `run upd`)
@@ -642,6 +666,79 @@ run qrc
 # Update Homebrew, Rust toolchain, and global Node packages in 1 step:
 run update
 run upd
+```
+
+#### 6. macOS Native Neural Vision OCR (`run ocr`, `run txt`, `run vision`)
+```bash
+# Drag and select any screen area with macOS crosshairs to extract text & copy to clipboard:
+run ocr
+run txt
+run vision
+
+# Extract text directly from an image file:
+run ocr /path/to/screenshot.png
+run ocr document.jpg
+```
+
+#### 7. Terminal TrueColor Image Viewer (`run img`, `run pic`, `run view`)
+```bash
+# Render any image (.png, .jpg, .webp, etc.) directly in terminal with 24-bit TrueColor ANSI half-blocks:
+run img logo.png
+run pic photo.jpg
+run view banner.webp
+
+# Limit rendering width to custom terminal column width:
+run img logo.png -w 60
+```
+
+#### 8. Color Inspector, Converter & macOS Eyedropper (`run color`, `run hex`, `run picker`)
+```bash
+# Inspect hex color, show live TrueColor swatch, and convert to RGB, HSL, Flutter, Android, CSS:
+run color #3B82F6
+run hex "#ff007f"
+run color "rgb(59, 130, 246)"
+run color blue
+
+# Launch native macOS magnifying glass eyedropper loupe to pick any pixel from screen:
+run color --pick
+run hex -p
+run picker
+```
+
+#### 9. Authenticated File Encryption & Decryption (`run encrypt`, `run decrypt`, `run enc`, `run dec`)
+```bash
+# Encrypt sensitive files with military-grade AES-256-GCM authenticated encryption:
+run encrypt .env
+run enc secret_notes.txt
+
+# Decrypt previously encrypted file:
+run decrypt .env.enc
+run dec secret_notes.txt.enc
+
+# Pass password directly via flag:
+run enc credentials.json -p "MyMasterPassword"
+run dec credentials.json.enc -p "MyMasterPassword"
+```
+
+#### 10. Local Network & Wi-Fi Radar (`run lan`, `run rad`, `run radar`)
+```bash
+# Scan and discover all active devices on your local Wi-Fi/subnet (IP, MAC, Hostname, Role):
+run lan
+run rad
+run radar
+```
+
+#### 11. Developer Mock & Dummy Data Generator (`run mock`, `run fak`, `run fake`)
+```bash
+# Generate 5 realistic mock user profiles in formatted JSON:
+run mock
+run mock user 5
+
+# Generate 10 mock product records in CSV:
+run mock product -n 10 --csv
+
+# Copy generated mock data directly to macOS clipboard:
+run mock user 20 -c
 ```
 
 ---
