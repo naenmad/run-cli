@@ -3520,60 +3520,418 @@ fn generate_secure_password(len: usize) -> String {
 }
 
 // ============================================================================
-// Terminal QR Code Generator (`run qr`, `run qrc`)
+// Enhanced QR Code Suite (`run qr`, `run qrc`)
 // ============================================================================
 
-pub fn handle_qr(theme: &ColorfulTheme, content: Option<&str>) -> Result<()> {
-    let text = match content {
-        Some(c) if !c.trim().is_empty() => c.to_string(),
-        _ => {
-            let clip = crate::mac::read_from_clipboard().unwrap_or_default();
-            let clip_trimmed = clip.trim().to_string();
+pub fn render_qr_to_terminal(code: &qrcode::QrCode) -> String {
+    use qrcode::render::unicode;
+    code.render::<unicode::Dense1x2>()
+        .dark_color(unicode::Dense1x2::Light)
+        .light_color(unicode::Dense1x2::Dark)
+        .build()
+}
 
-            if !clip_trimmed.is_empty() && (clip_trimmed.starts_with("http://") || clip_trimmed.starts_with("https://")) {
-                println!("{} Using URL from clipboard: {}", "📋".bold(), clip_trimmed.cyan());
-                clip_trimmed
-            } else if !std::io::stdin().is_terminal() {
-                if !clip_trimmed.is_empty() {
-                    clip_trimmed
-                } else {
-                    bail!("provide text or URL to generate QR code: run qr <text>");
+pub fn save_qr_as_png(code: &qrcode::QrCode, path: &std::path::Path) -> Result<()> {
+    use image::Luma;
+    let img = code
+        .render::<Luma<u8>>()
+        .min_dimensions(512, 512)
+        .build();
+    img.save(path)
+        .with_context(|| format!("failed to save QR code image to '{}'", path.display()))?;
+    Ok(())
+}
+
+pub fn copy_qr_image_to_clipboard(code: &qrcode::QrCode) -> Result<()> {
+    let tmp_path = std::env::temp_dir().join(format!("run_qr_{}.png", std::process::id()));
+    save_qr_as_png(code, &tmp_path)?;
+    let script = format!(
+        "set the clipboard to (read (POSIX file \"{}\") as «class PNGf»)",
+        tmp_path.display()
+    );
+    let status = Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .status()
+        .context("failed to execute osascript to copy image to clipboard")?;
+    let _ = std::fs::remove_file(&tmp_path);
+    if status.success() {
+        println!("{} QR code image copied to clipboard!", "📋".green().bold());
+        Ok(())
+    } else {
+        bail!("failed to copy QR code image to clipboard");
+    }
+}
+
+pub fn detect_wifi_ssid() -> Option<String> {
+    if let Ok(output) = Command::new("ipconfig").args(["getsummary", "en0"]).output() {
+        let text = String::from_utf8_lossy(&output.stdout);
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("SSID :") {
+                let ssid = trimmed.trim_start_matches("SSID :").trim();
+                if !ssid.is_empty() && ssid != "<redacted>" {
+                    return Some(ssid.to_string());
                 }
-            } else {
-                ui::maybe_auto_clear();
-                ui::print_banner();
-                ui::render_breadcrumbs(&["run", "Terminal QR Generator"]);
-
-                let default_val = if !clip_trimmed.is_empty() {
-                    clip_trimmed
-                } else {
-                    "https://github.com/naenmad/run-cli".to_string()
-                };
-                Input::with_theme(theme)
-                    .with_prompt("Enter text or URL for QR Code")
-                    .default(default_val)
-                    .interact_text()?
             }
+        }
+    }
+    if let Ok(output) = Command::new("networksetup").args(["-getairportnetwork", "en0"]).output() {
+        let text = String::from_utf8_lossy(&output.stdout);
+        if let Some(pos) = text.find(": ") {
+            let ssid = text[pos + 2..].trim();
+            if !ssid.is_empty() && !ssid.contains("You are not associated") {
+                return Some(ssid.to_string());
+            }
+        }
+    }
+    None
+}
+
+pub fn detect_lan_ip() -> String {
+    if let Ok(output) = Command::new("ipconfig").args(["getifaddr", "en0"]).output() {
+        let ip = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !ip.is_empty() {
+            return ip;
+        }
+    }
+    if let Ok(output) = Command::new("ipconfig").args(["getifaddr", "en1"]).output() {
+        let ip = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !ip.is_empty() {
+            return ip;
+        }
+    }
+    "127.0.0.1".to_string()
+}
+
+pub fn handle_qr_wifi(
+    theme: &ColorfulTheme,
+    args: &[String],
+    output: Option<&std::path::Path>,
+    copy: bool,
+) -> Result<()> {
+    let detected_ssid = detect_wifi_ssid();
+    let ssid = if args.len() > 1 && !args[1].trim().is_empty() {
+        args[1].trim().to_string()
+    } else if let Some(ref d) = detected_ssid {
+        if std::io::stdin().is_terminal() {
+            Input::with_theme(theme)
+                .with_prompt("Wi-Fi SSID (Network Name)")
+                .default(d.clone())
+                .interact_text()?
+        } else {
+            d.clone()
+        }
+    } else if std::io::stdin().is_terminal() {
+        Input::with_theme(theme)
+            .with_prompt("Enter Wi-Fi SSID (Network Name)")
+            .interact_text()?
+    } else {
+        bail!("no Wi-Fi SSID specified. Usage: run qr wifi <SSID> [password]");
+    };
+
+    let password = if args.len() > 2 {
+        args[2].trim().to_string()
+    } else if std::io::stdin().is_terminal() {
+        dialoguer::Password::with_theme(theme)
+            .with_prompt("Enter Wi-Fi Password (leave empty for open network)")
+            .allow_empty_password(true)
+            .interact()?
+    } else {
+        String::new()
+    };
+
+    let qr_payload = if password.is_empty() {
+        format!("WIFI:T:nopass;S:{};;", ssid)
+    } else {
+        format!("WIFI:T:WPA;S:{};P:{};;", ssid, password)
+    };
+
+    let code = qrcode::QrCode::new(qr_payload.as_bytes())
+        .context("failed to generate Wi-Fi QR code")?;
+
+    let term_image = render_qr_to_terminal(&code);
+    println!();
+    println!("{}", term_image);
+    println!("  📶 Wi-Fi Network : {}", ssid.cyan().bold());
+    println!(
+        "  🔒 Security     : {}",
+        if password.is_empty() {
+            "Open (No Password)".yellow()
+        } else {
+            "WPA/WPA2".green()
+        }
+    );
+    println!("  📱 Scan with iPhone or Android camera to instantly join the network!");
+    println!();
+
+    if let Some(out) = output {
+        save_qr_as_png(&code, out)?;
+        println!(
+            "{} Saved QR image to {}",
+            "💾".green().bold(),
+            out.display().to_string().cyan()
+        );
+    }
+
+    if copy {
+        copy_qr_image_to_clipboard(&code)?;
+    }
+
+    Ok(())
+}
+
+fn scan_qr_from_image_vision(path: &std::path::Path) -> Result<String> {
+    let swift_code = r#"
+import Foundation
+import Vision
+import CoreImage
+
+guard CommandLine.arguments.count > 1 else { exit(1) }
+let path = CommandLine.arguments[1]
+let url = URL(fileURLWithPath: path)
+guard let ciImage = CIImage(contentsOf: url) else { exit(2) }
+
+var detected: [String] = []
+let request = VNDetectBarcodesRequest { req, _ in
+    if let results = req.results as? [VNBarcodeObservation] {
+        for barcode in results {
+            if let val = barcode.payloadStringValue {
+                detected.append(val)
+            }
+        }
+    }
+}
+let handler = VNImageRequestHandler(ciImage: ciImage, options: [:])
+try? handler.perform([request])
+
+if !detected.isEmpty {
+    print(detected.joined(separator: "\n"))
+    exit(0)
+} else {
+    exit(3)
+}
+"#;
+    let output = Command::new("swift")
+        .arg("-e")
+        .arg(swift_code)
+        .arg(path)
+        .output()
+        .context("failed to execute macOS Vision QR scanner")?;
+
+    if output.status.success() {
+        let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if text.is_empty() {
+            bail!("no QR code found in selected image");
+        }
+        Ok(text)
+    } else {
+        bail!("no QR code detected in image");
+    }
+}
+
+pub fn handle_qr_scan(image_arg: Option<&str>) -> Result<()> {
+    let tmp_path = std::env::temp_dir().join(format!("run_qr_scan_{}.png", std::process::id()));
+    let target_path = match image_arg {
+        Some(p) => std::path::PathBuf::from(p),
+        None => {
+            println!(
+                "{} Drag and select the QR code on your screen (or press Esc to cancel)...",
+                "📸".bold()
+            );
+            let status = Command::new("screencapture")
+                .arg("-i")
+                .arg(&tmp_path)
+                .status()
+                .context("failed to launch screencapture")?;
+            if !status.success() || !tmp_path.exists() {
+                println!("Screenshot cancelled.");
+                return Ok(());
+            }
+            tmp_path.clone()
         }
     };
 
-    use qrcode::QrCode;
-    use qrcode::render::unicode;
+    if !target_path.exists() {
+        bail!("image file '{}' does not exist", target_path.display());
+    }
 
-    let code = QrCode::new(text.as_bytes()).context("failed to encode text into QR code")?;
-    let image = code
-        .render::<unicode::Dense1x2>()
-        .dark_color(unicode::Dense1x2::Light)
-        .light_color(unicode::Dense1x2::Dark)
-        .build();
+    let result = scan_qr_from_image_vision(&target_path);
+    if target_path == tmp_path {
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+
+    match result {
+        Ok(text) => {
+            println!();
+            println!("{} QR Code Decoded:", "🔍".green().bold());
+            println!("   {}", text.cyan().bold());
+            println!();
+            let _ = crate::mac::copy_to_clipboard(&text);
+            println!("{} Content copied to clipboard!", "📋".green().bold());
+            Ok(())
+        }
+        Err(e) => {
+            bail!("{e}");
+        }
+    }
+}
+
+pub fn handle_qr_share(path: &std::path::Path) -> Result<()> {
+    if !path.exists() {
+        bail!("file '{}' does not exist", path.display());
+    }
+    let file_path = path.canonicalize()?;
+    let filename = file_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("file")
+        .to_string();
+
+    let file_bytes = std::fs::read(&file_path)
+        .with_context(|| format!("failed to read file '{}'", file_path.display()))?;
+    let file_len = file_bytes.len();
+
+    let local_ip = detect_lan_ip();
+    let listener = std::net::TcpListener::bind("0.0.0.0:0")
+        .context("failed to bind ephemeral TCP listener")?;
+    let port = listener.local_addr()?.port();
+    let download_url = format!("http://{}:{}/download/{}", local_ip, port, filename);
+
+    println!();
+    println!("{} Local Wi-Fi File Sharing Server", "📲".bold());
+    println!(
+        "  File: {} ({})",
+        filename.cyan().bold(),
+        format_bytes(file_len as u64)
+    );
+    println!("  URL:  {}", download_url.green().bold());
+    println!("  Scan QR code below with any phone or device on this Wi-Fi:\n");
+
+    let code = qrcode::QrCode::new(download_url.as_bytes())
+        .context("failed to create share QR code")?;
+    println!("{}", render_qr_to_terminal(&code));
+    println!(
+        "  Server is waiting for download... (Press {} to stop)",
+        "Ctrl+C".bold()
+    );
+
+    // Accept 1 connection and serve file
+    if let Ok((mut stream, peer_addr)) = listener.accept() {
+        use std::io::{Read, Write};
+        let mut buf = [0u8; 1024];
+        let _ = stream.read(&mut buf);
+        let header = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"{}\"\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            filename, file_len
+        );
+        let _ = stream.write_all(header.as_bytes());
+        let _ = stream.write_all(&file_bytes);
+        let _ = stream.flush();
+        println!(
+            "\n{} Successfully sent '{}' to {}!",
+            "✅".green().bold(),
+            filename,
+            peer_addr
+        );
+    }
+    Ok(())
+}
+
+pub fn handle_qr(
+    theme: &ColorfulTheme,
+    args: &[String],
+    output: Option<&std::path::Path>,
+    copy: bool,
+    wifi: bool,
+    scan: bool,
+    share: Option<&std::path::Path>,
+) -> Result<()> {
+    if wifi || args.first().map(|s| s.as_str()) == Some("wifi") {
+        return handle_qr_wifi(theme, args, output, copy);
+    }
+    if scan || args.first().map(|s| s.as_str()) == Some("scan") {
+        let scan_target = if args.first().map(|s| s.as_str()) == Some("scan") {
+            args.get(1).map(|s| s.as_str())
+        } else {
+            args.first().map(|s| s.as_str())
+        };
+        return handle_qr_scan(scan_target);
+    }
+    if let Some(share_path) = share {
+        return handle_qr_share(share_path);
+    }
+    if args.first().map(|s| s.as_str()) == Some("share") {
+        if let Some(target) = args.get(1) {
+            return handle_qr_share(std::path::Path::new(target));
+        } else {
+            bail!("specify file to share: run qr share <file_path>");
+        }
+    }
+
+    let text = if !args.is_empty() {
+        args.join(" ")
+    } else {
+        let clip = crate::mac::read_from_clipboard().unwrap_or_default();
+        let clip_trimmed = clip.trim().to_string();
+
+        if !clip_trimmed.is_empty()
+            && (clip_trimmed.starts_with("http://") || clip_trimmed.starts_with("https://"))
+        {
+            println!(
+                "{} Using URL from clipboard: {}",
+                "📋".bold(),
+                clip_trimmed.cyan()
+            );
+            clip_trimmed
+        } else if !std::io::stdin().is_terminal() {
+            if !clip_trimmed.is_empty() {
+                clip_trimmed
+            } else {
+                bail!("provide text or URL to generate QR code: run qr <text>");
+            }
+        } else {
+            ui::maybe_auto_clear();
+            ui::print_banner();
+            ui::render_breadcrumbs(&["run", "Terminal QR Generator"]);
+
+            let default_val = if !clip_trimmed.is_empty() {
+                clip_trimmed
+            } else {
+                "https://github.com/naenmad/run-cli".to_string()
+            };
+            Input::with_theme(theme)
+                .with_prompt("Enter text or URL for QR Code")
+                .default(default_val)
+                .interact_text()?
+        }
+    };
+
+    let code = qrcode::QrCode::new(text.as_bytes()).context("failed to encode text into QR code")?;
+    let image = render_qr_to_terminal(&code);
 
     println!();
     println!("{}", image);
     println!("  📱 Content: {}", text.cyan().bold());
     println!("  Scan with phone camera or QR reader.");
     println!();
+
+    if let Some(out) = output {
+        save_qr_as_png(&code, out)?;
+        println!(
+            "{} Saved QR code image to {}",
+            "💾".green().bold(),
+            out.display().to_string().cyan()
+        );
+    }
+
+    if copy {
+        copy_qr_image_to_clipboard(&code)?;
+    }
+
     Ok(())
 }
+
 
 // ============================================================================
 // System & Toolchain Updater (`run update`, `run upd`)
@@ -4416,6 +4774,893 @@ pub fn handle_browse(
     let status = Command::new("open").arg(&final_url).status()?;
     if !status.success() {
         bail!("failed to launch browser for '{final_url}'");
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// macOS Native Neural OCR (`run ocr`, `run text`, `run read`)
+// ============================================================================
+
+pub fn handle_ocr(image_path: Option<&std::path::Path>) -> Result<()> {
+    let tmp_path = std::env::temp_dir().join(format!("run_ocr_{}.png", std::process::id()));
+    let target = match image_path {
+        Some(p) => {
+            if !p.exists() {
+                bail!("image file '{}' does not exist", p.display());
+            }
+            p.to_path_buf()
+        }
+        None => {
+            println!(
+                "{} Drag to select an area of your screen (or press Esc to cancel)...",
+                "📸".bold()
+            );
+            let status = Command::new("screencapture")
+                .arg("-i")
+                .arg(&tmp_path)
+                .status()
+                .context("failed to launch screencapture")?;
+            if !status.success() || !tmp_path.exists() {
+                println!("Capture cancelled.");
+                return Ok(());
+            }
+            tmp_path.clone()
+        }
+    };
+
+    println!(
+        "{} Recognizing text with Apple Vision Neural Engine...",
+        "👁️".bold()
+    );
+    let swift_code = r#"
+import Foundation
+import Vision
+import CoreImage
+
+guard CommandLine.arguments.count > 1 else { exit(1) }
+let path = CommandLine.arguments[1]
+let url = URL(fileURLWithPath: path)
+guard let ciImage = CIImage(contentsOf: url) else { exit(2) }
+
+var lines: [String] = []
+let request = VNRecognizeTextRequest { req, _ in
+    if let results = req.results as? [VNRecognizedTextObservation] {
+        for obs in results {
+            if let top = obs.topCandidates(1).first {
+                lines.append(top.string)
+            }
+        }
+    }
+}
+request.recognitionLevel = .accurate
+request.usesLanguageCorrection = true
+
+let handler = VNImageRequestHandler(ciImage: ciImage, options: [:])
+try? handler.perform([request])
+
+if !lines.isEmpty {
+    print(lines.joined(separator: "\n"))
+    exit(0)
+} else {
+    exit(3)
+}
+"#;
+    let output = Command::new("swift")
+        .arg("-e")
+        .arg(swift_code)
+        .arg(&target)
+        .output()
+        .context("failed to run Apple Vision OCR")?;
+
+    if target == tmp_path {
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+
+    if output.status.success() {
+        let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if text.is_empty() {
+            println!("{} No text detected in selection/image.", "ℹ️".yellow());
+            return Ok(());
+        }
+        let line_count = text.lines().count();
+        let word_count = text.split_whitespace().count();
+
+        println!();
+        println!(
+            "{} Extracted Text ({} lines, {} words):",
+            "📝".green().bold(),
+            line_count,
+            word_count
+        );
+        println!("{}", "─".repeat(50).dimmed());
+        println!("{}", text);
+        println!("{}", "─".repeat(50).dimmed());
+
+        let _ = crate::mac::copy_to_clipboard(&text);
+        println!("{} Copied extracted text to clipboard!", "📋".green().bold());
+        Ok(())
+    } else {
+        bail!("no readable text found in image/selection");
+    }
+}
+
+// ============================================================================
+// Terminal TrueColor Image Viewer (`run img`, `run view`, `run pic`)
+// ============================================================================
+
+pub fn handle_img(image_path: &std::path::Path, max_width: Option<u32>) -> Result<()> {
+    if !image_path.exists() {
+        bail!("image file '{}' does not exist", image_path.display());
+    }
+
+    let img = image::open(image_path)
+        .with_context(|| format!("failed to open image '{}'", image_path.display()))?;
+
+    let term_width = dialoguer::console::Term::stdout().size().1 as u32;
+    let target_width = max_width.unwrap_or_else(|| term_width.saturating_sub(4).clamp(20, 90));
+
+    let (orig_w, orig_h) = (img.width(), img.height());
+    let scale = target_width as f64 / orig_w as f64;
+    let mut target_height = ((orig_h as f64 * scale).round() as u32).max(2);
+    if !target_height.is_multiple_of(2) {
+        target_height += 1;
+    }
+
+    let resized = img.resize_exact(
+        target_width,
+        target_height,
+        image::imageops::FilterType::Lanczos3,
+    );
+    let rgb = resized.to_rgb8();
+
+    println!();
+    for y in (0..target_height).step_by(2) {
+        let mut row_str = String::with_capacity((target_width * 25) as usize);
+        for x in 0..target_width {
+            let top = rgb.get_pixel(x, y);
+            let bottom = if y + 1 < target_height {
+                rgb.get_pixel(x, y + 1)
+            } else {
+                top
+            };
+            row_str.push_str(&format!(
+                "\x1b[38;2;{};{};{}m\x1b[48;2;{};{};{}m▀\x1b[0m",
+                top[0], top[1], top[2], bottom[0], bottom[1], bottom[2]
+            ));
+        }
+        println!("{}", row_str);
+    }
+    println!(
+        "  🖼️  {} ({}x{} original, rendered {}x{})",
+        image_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("image")
+            .cyan()
+            .bold(),
+        orig_w,
+        orig_h,
+        target_width,
+        target_height
+    );
+    println!();
+    Ok(())
+}
+
+// ============================================================================
+// Color & Palette Toolkit (`run color`, `run hex`, `run rgb`)
+// ============================================================================
+
+pub struct ParsedColor {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+fn rgb_to_hsl(r: u8, g: u8, b: u8) -> (f64, f64, f64) {
+    let rf = r as f64 / 255.0;
+    let gf = g as f64 / 255.0;
+    let bf = b as f64 / 255.0;
+    let max = rf.max(gf).max(bf);
+    let min = rf.min(gf).min(bf);
+    let delta = max - min;
+    let l = (max + min) / 2.0;
+
+    if delta == 0.0 {
+        (0.0, 0.0, l * 100.0)
+    } else {
+        let s = if l < 0.5 {
+            delta / (max + min)
+        } else {
+            delta / (2.0 - max - min)
+        };
+        let mut h = if (max - rf).abs() < f64::EPSILON {
+            (gf - bf) / delta + (if gf < bf { 6.0 } else { 0.0 })
+        } else if (max - gf).abs() < f64::EPSILON {
+            (bf - rf) / delta + 2.0
+        } else {
+            (rf - gf) / delta + 4.0
+        };
+        h *= 60.0;
+        (h.round(), (s * 100.0).round(), (l * 100.0).round())
+    }
+}
+
+pub fn parse_color_string(input: &str) -> Option<ParsedColor> {
+    let s = input.trim().to_lowercase();
+    match s.as_str() {
+        "red" => return Some(ParsedColor { r: 239, g: 68, b: 68 }),
+        "blue" => return Some(ParsedColor { r: 59, g: 130, b: 246 }),
+        "green" => return Some(ParsedColor { r: 34, g: 197, b: 94 }),
+        "yellow" => return Some(ParsedColor { r: 234, g: 179, b: 8 }),
+        "purple" => return Some(ParsedColor { r: 168, g: 85, b: 247 }),
+        "pink" => return Some(ParsedColor { r: 236, g: 72, b: 153 }),
+        "indigo" => return Some(ParsedColor { r: 99, g: 102, b: 241 }),
+        "orange" => return Some(ParsedColor { r: 249, g: 115, b: 22 }),
+        "teal" => return Some(ParsedColor { r: 20, g: 184, b: 166 }),
+        "cyan" => return Some(ParsedColor { r: 6, g: 182, b: 212 }),
+        "white" => return Some(ParsedColor { r: 255, g: 255, b: 255 }),
+        "black" => return Some(ParsedColor { r: 0, g: 0, b: 0 }),
+        "gray" | "grey" => return Some(ParsedColor { r: 107, g: 114, b: 128 }),
+        _ => {}
+    }
+
+    let hex_trimmed = s.trim_start_matches('#');
+    if hex_trimmed.len() == 6
+        && hex_trimmed.chars().all(|c| c.is_ascii_hexdigit())
+        && let (Ok(r), Ok(g), Ok(b)) = (
+            u8::from_str_radix(&hex_trimmed[0..2], 16),
+            u8::from_str_radix(&hex_trimmed[2..4], 16),
+            u8::from_str_radix(&hex_trimmed[4..6], 16),
+        )
+    {
+        return Some(ParsedColor { r, g, b });
+    }
+    if hex_trimmed.len() == 3 && hex_trimmed.chars().all(|c| c.is_ascii_hexdigit()) {
+        let chars: Vec<char> = hex_trimmed.chars().collect();
+        let r_str = format!("{}{}", chars[0], chars[0]);
+        let g_str = format!("{}{}", chars[1], chars[1]);
+        let b_str = format!("{}{}", chars[2], chars[2]);
+        if let (Ok(r), Ok(g), Ok(b)) = (
+            u8::from_str_radix(&r_str, 16),
+            u8::from_str_radix(&g_str, 16),
+            u8::from_str_radix(&b_str, 16),
+        ) {
+            return Some(ParsedColor { r, g, b });
+        }
+    }
+
+    let clean_rgb = s
+        .trim_start_matches("rgb(")
+        .trim_end_matches(')')
+        .replace(',', " ");
+    let parts: Vec<&str> = clean_rgb.split_whitespace().collect();
+    if parts.len() == 3
+        && let (Ok(r), Ok(g), Ok(b)) = (
+            parts[0].parse::<u8>(),
+            parts[1].parse::<u8>(),
+            parts[2].parse::<u8>(),
+        )
+    {
+        return Some(ParsedColor { r, g, b });
+    }
+
+    None
+}
+
+pub fn pick_color_macos_loupe() -> Result<String> {
+    println!(
+        "{} Click anywhere on your screen to pick a pixel color...",
+        "🔍".bold()
+    );
+    let swift_code = r##"
+import AppKit
+
+let app = NSApplication.shared
+app.setActivationPolicy(.accessory)
+
+if #available(macOS 10.15, *) {
+    let sampler = NSColorSampler()
+    sampler.show { selectedColor in
+        if let color = selectedColor?.usingColorSpace(.sRGB) {
+            let r = Int(color.redComponent * 255.0)
+            let g = Int(color.greenComponent * 255.0)
+            let b = Int(color.blueComponent * 255.0)
+            print(String(format: "#%02X%02X%02X", r, g, b))
+        }
+        exit(0)
+    }
+    app.run()
+} else {
+    exit(1)
+}
+"##;
+    let output = Command::new("swift")
+        .arg("-e")
+        .arg(swift_code)
+        .output()
+        .context("failed to execute macOS NSColorSampler")?;
+
+    if output.status.success() {
+        let hex = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if hex.is_empty() {
+            bail!("color picking was cancelled");
+        }
+        Ok(hex)
+    } else {
+        bail!("color picking cancelled or unavailable");
+    }
+}
+
+pub fn handle_color(
+    theme: &ColorfulTheme,
+    input: Option<&str>,
+    pick: bool,
+) -> Result<()> {
+    let raw_color = if pick {
+        pick_color_macos_loupe()?
+    } else {
+        match input {
+            Some(i) if !i.trim().is_empty() => i.trim().to_string(),
+            _ => {
+                let clip = crate::mac::read_from_clipboard().unwrap_or_default();
+                let clip_trimmed = clip.trim().to_string();
+                if parse_color_string(&clip_trimmed).is_some() {
+                    println!(
+                        "{} Using color from clipboard: {}",
+                        "📋".bold(),
+                        clip_trimmed.cyan()
+                    );
+                    clip_trimmed
+                } else if std::io::stdin().is_terminal() {
+                    let cancel_btn = cancel_option();
+                    let options = [
+                        "Enter Color code (HEX, RGB, HSL, name)",
+                        "Pick color from screen (macOS Eyedropper Loupe)",
+                        &cancel_btn,
+                    ];
+                    let selection = Select::with_theme(theme)
+                        .with_prompt("Color Toolkit")
+                        .items(&options)
+                        .default(0)
+                        .interact()?;
+                    match selection {
+                        0 => Input::with_theme(theme)
+                            .with_prompt("Enter color")
+                            .default("#3B82F6".to_string())
+                            .interact_text()?,
+                        1 => pick_color_macos_loupe()?,
+                        _ => {
+                            println!("Cancelled.");
+                            return Ok(());
+                        }
+                    }
+                } else {
+                    bail!("provide color to inspect: run color <#hex|rgb|name> or run color --pick");
+                }
+            }
+        }
+    };
+
+    let color = match parse_color_string(&raw_color) {
+        Some(c) => c,
+        None => bail!(
+            "could not parse color '{}'. Supported: #3B82F6, #FFF, rgb(59, 130, 246), or color name",
+            raw_color
+        ),
+    };
+
+    let (h, s, l) = rgb_to_hsl(color.r, color.g, color.b);
+    let hex = format!("#{:02X}{:02X}{:02X}", color.r, color.g, color.b);
+    let flutter = format!("Color(0xFF{:02X}{:02X}{:02X})", color.r, color.g, color.b);
+    let android = format!("#FF{:02X}{:02X}{:02X}", color.r, color.g, color.b);
+    let rgb_str = format!("rgb({}, {}, {})", color.r, color.g, color.b);
+    let hsl_str = format!("hsl({:.0}, {:.0}%, {:.0}%)", h, s, l);
+    let css_var = format!("--color: {};", hex.to_lowercase());
+
+    println!();
+    println!(
+        "  \x1b[48;2;{};{};{}m                                            \x1b[0m",
+        color.r, color.g, color.b
+    );
+    println!(
+        "  \x1b[48;2;{};{};{}m                    COLOR                   \x1b[0m",
+        color.r, color.g, color.b
+    );
+    println!(
+        "  \x1b[48;2;{};{};{}m                                            \x1b[0m",
+        color.r, color.g, color.b
+    );
+    println!();
+    println!("  HEX       : {}", hex.cyan().bold());
+    println!("  RGB       : {}", rgb_str.green().bold());
+    println!("  HSL       : {}", hsl_str.yellow().bold());
+    println!("  Flutter   : {}", flutter.magenta().bold());
+    println!("  Android   : {}", android.blue().bold());
+    println!("  CSS Var   : {}", css_var.dimmed());
+    println!();
+
+    let _ = crate::mac::copy_to_clipboard(&hex);
+    println!(
+        "{} Hex {} copied to clipboard!",
+        "📋".green().bold(),
+        hex.cyan().bold()
+    );
+    Ok(())
+}
+
+// ============================================================================
+// Authenticated File Encryption & Decryption (`run lock`, `run unlock`)
+// ============================================================================
+
+const RUNLOCK_MAGIC: &[u8; 8] = b"RUNLOCK1";
+
+fn derive_aes_key(password: &str, salt: &[u8; 16]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(password.as_bytes());
+    hasher.update(salt);
+    let mut current = hasher.finalize();
+
+    for _ in 0..50_000 {
+        let mut h = Sha256::new();
+        h.update(current);
+        h.update(salt);
+        current = h.finalize();
+    }
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&current);
+    key
+}
+
+pub fn handle_encrypt(
+    theme: &ColorfulTheme,
+    file_path: &std::path::Path,
+    password_arg: Option<&str>,
+) -> Result<()> {
+    use aes_gcm::{
+        aead::{Aead, KeyInit},
+        Aes256Gcm, Nonce,
+    };
+    use std::io::Read;
+
+    if !file_path.exists() {
+        bail!("file '{}' does not exist", file_path.display());
+    }
+    if file_path.is_dir() {
+        bail!(
+            "'{}' is a directory. Please pack it first (e.g. run pack)",
+            file_path.display()
+        );
+    }
+
+    let plaintext = std::fs::read(file_path)
+        .with_context(|| format!("failed to read file '{}'", file_path.display()))?;
+
+    let password = match password_arg {
+        Some(p) if !p.is_empty() => p.to_string(),
+        _ => {
+            if std::io::stdin().is_terminal() {
+                dialoguer::Password::with_theme(theme)
+                    .with_prompt("Enter encryption password")
+                    .with_confirmation("Confirm password", "Passwords do not match!")
+                    .interact()?
+            } else {
+                bail!("password required for encryption. Usage: run encrypt <file> --password <pass>");
+            }
+        }
+    };
+
+    if password.is_empty() {
+        bail!("password cannot be empty");
+    }
+
+    let mut salt = [0u8; 16];
+    let mut nonce_bytes = [0u8; 12];
+    let mut urandom =
+        std::fs::File::open("/dev/urandom").context("failed to open /dev/urandom")?;
+    urandom.read_exact(&mut salt)?;
+    urandom.read_exact(&mut nonce_bytes)?;
+
+    let key_bytes = derive_aes_key(&password, &salt);
+    let cipher = Aes256Gcm::new_from_slice(&key_bytes)
+        .map_err(|e| anyhow::anyhow!("cipher init error: {e}"))?;
+    let nonce = Nonce::from(nonce_bytes);
+
+    let ciphertext = cipher
+        .encrypt(&nonce, plaintext.as_ref())
+        .map_err(|e| anyhow::anyhow!("encryption failed: {e}"))?;
+
+    let out_path = file_path.with_extension(format!(
+        "{}.enc",
+        file_path.extension().and_then(|s| s.to_str()).unwrap_or("")
+    ));
+
+    let mut out_file = std::fs::File::create(&out_path)
+        .with_context(|| format!("failed to create output file '{}'", out_path.display()))?;
+    out_file.write_all(RUNLOCK_MAGIC)?;
+    out_file.write_all(&salt)?;
+    out_file.write_all(&nonce_bytes)?;
+    out_file.write_all(&ciphertext)?;
+
+    println!();
+    println!(
+        "{} File successfully encrypted with AES-256-GCM!",
+        "🔒".green().bold()
+    );
+    println!("  Original : {}", file_path.display().to_string().dimmed());
+    println!(
+        "  Encrypted: {}",
+        out_path.display().to_string().cyan().bold()
+    );
+    println!("  Size     : {}", format_bytes(ciphertext.len() as u64 + 36));
+    println!(
+        "  💡 To decrypt, run: {}",
+        format!("run decrypt {}", out_path.display()).yellow()
+    );
+    println!();
+
+    Ok(())
+}
+
+pub fn handle_decrypt(
+    theme: &ColorfulTheme,
+    file_path: &std::path::Path,
+    password_arg: Option<&str>,
+) -> Result<()> {
+    use aes_gcm::{
+        aead::{Aead, KeyInit},
+        Aes256Gcm, Nonce,
+    };
+    use std::io::Read;
+
+    if !file_path.exists() {
+        bail!("file '{}' does not exist", file_path.display());
+    }
+
+    let mut file = std::fs::File::open(file_path)
+        .with_context(|| format!("failed to open file '{}'", file_path.display()))?;
+
+    let mut magic = [0u8; 8];
+    if file.read_exact(&mut magic).is_err() || &magic != RUNLOCK_MAGIC {
+        bail!("file is not a valid encrypted file (invalid magic header)");
+    }
+
+    let mut salt = [0u8; 16];
+    let mut nonce_bytes = [0u8; 12];
+    file.read_exact(&mut salt)?;
+    file.read_exact(&mut nonce_bytes)?;
+
+    let mut ciphertext = Vec::new();
+    file.read_to_end(&mut ciphertext)?;
+
+    let password = match password_arg {
+        Some(p) if !p.is_empty() => p.to_string(),
+        _ => {
+            if std::io::stdin().is_terminal() {
+                dialoguer::Password::with_theme(theme)
+                    .with_prompt("Enter decryption password")
+                    .interact()?
+            } else {
+                bail!("password required for decryption. Usage: run decrypt <file> --password <pass>");
+            }
+        }
+    };
+
+    let key_bytes = derive_aes_key(&password, &salt);
+    let cipher = Aes256Gcm::new_from_slice(&key_bytes)
+        .map_err(|e| anyhow::anyhow!("cipher init error: {e}"))?;
+    let nonce = Nonce::from(nonce_bytes);
+
+    let plaintext = cipher
+        .decrypt(&nonce, ciphertext.as_ref())
+        .map_err(|_| anyhow::anyhow!("decryption failed: incorrect password or corrupted file"))?;
+
+    let filename_str = file_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unlocked");
+    let out_name = if filename_str.ends_with(".enc") {
+        filename_str.trim_end_matches(".enc")
+    } else {
+        "decrypted_file"
+    };
+    let out_path = file_path.with_file_name(out_name);
+
+    std::fs::write(&out_path, plaintext)
+        .with_context(|| format!("failed to write decrypted file '{}'", out_path.display()))?;
+
+    println!();
+    println!("{} File successfully decrypted!", "🔓".green().bold());
+    println!(
+        "  Decrypted: {}",
+        out_path.display().to_string().cyan().bold()
+    );
+    println!();
+
+    Ok(())
+}
+
+// ============================================================================
+// LAN / Wi-Fi Device Radar (`run lan`, `run radar`)
+// ============================================================================
+
+pub struct LanDevice {
+    pub ip: String,
+    pub mac: String,
+    pub hostname: String,
+    pub role: String,
+}
+
+pub fn handle_lan(_theme: &ColorfulTheme) -> Result<()> {
+    println!("{} Scanning local network devices via ARP...", "📡".bold());
+
+    let output = Command::new("arp")
+        .arg("-a")
+        .output()
+        .context("failed to execute 'arp -a'")?;
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut devices: Vec<LanDevice> = Vec::new();
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || !trimmed.contains(" at ") {
+            continue;
+        }
+
+        let mut parts = trimmed.split_whitespace();
+        let raw_host = parts.next().unwrap_or("?");
+        let hostname = if raw_host == "?" {
+            "Unknown".to_string()
+        } else {
+            raw_host.to_string()
+        };
+
+        let ip_part = parts.next().unwrap_or("");
+        let ip = ip_part.trim_matches(|c| c == '(' || c == ')').to_string();
+
+        if parts.next() != Some("at") {
+            continue;
+        }
+
+        let raw_mac = parts.next().unwrap_or("??:??:??:??:??:??");
+        let formatted_mac = raw_mac
+            .split(':')
+            .map(|octet| format!("{:02x}", u8::from_str_radix(octet, 16).unwrap_or(0)))
+            .collect::<Vec<String>>()
+            .join(":");
+
+        let role = if formatted_mac == "ff:ff:ff:ff:ff:ff" {
+            "Broadcast"
+        } else if trimmed.contains("permanent") {
+            "This Mac (Host)"
+        } else if ip.ends_with(".1") {
+            "Router / Gateway"
+        } else if formatted_mac.starts_with("01:00:5e") || ip.starts_with("224.") {
+            "Multicast"
+        } else {
+            "Device"
+        };
+
+        if role == "Multicast" || role == "Broadcast" {
+            continue;
+        }
+
+        devices.push(LanDevice {
+            ip,
+            mac: formatted_mac,
+            hostname,
+            role: role.to_string(),
+        });
+    }
+
+    devices.sort_by(|a, b| {
+        let a_last = a
+            .ip
+            .split('.')
+            .next_back()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+        let b_last = b
+            .ip
+            .split('.')
+            .next_back()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+        a_last.cmp(&b_last)
+    });
+
+    println!();
+    println!(
+        "{} Discovered {} active devices on local network:",
+        "📡".cyan().bold(),
+        devices.len().to_string().green().bold()
+    );
+    println!(
+        "┌─────────────────┬───────────────────┬──────────────────────────────┬──────────────────┐"
+    );
+    println!(
+        "│ {:<15} │ {:<17} │ {:<28} │ {:<16} │",
+        "IP Address".bold(),
+        "MAC Address".bold(),
+        "Hostname".bold(),
+        "Role / Type".bold()
+    );
+    println!(
+        "├─────────────────┼───────────────────┼──────────────────────────────┼──────────────────┤"
+    );
+
+    for dev in &devices {
+        let role_colored = match dev.role.as_str() {
+            "Router / Gateway" => dev.role.green().bold(),
+            "This Mac (Host)" => dev.role.cyan().bold(),
+            _ => dev.role.dimmed(),
+        };
+        println!(
+            "│ {:<15} │ {:<17} │ {:<28} │ {:<16} │",
+            dev.ip.yellow(),
+            dev.mac,
+            dev.hostname,
+            role_colored
+        );
+    }
+    println!(
+        "└─────────────────┴───────────────────┴──────────────────────────────┴──────────────────┘"
+    );
+    println!();
+
+    Ok(())
+}
+
+// ============================================================================
+// Developer Mock Data Generator (`run mock`, `run fake`, `run dummy`)
+// ============================================================================
+
+pub fn handle_mock(
+    entity: Option<&str>,
+    count: usize,
+    as_csv: bool,
+    copy: bool,
+) -> Result<()> {
+    let mode = entity.unwrap_or("user").to_lowercase();
+    let num = count.clamp(1, 100);
+
+    let first_names = [
+        "Ahmad", "Budi", "Dewi", "Eko", "Fitri", "Gilang", "Hana", "Indra", "Joko", "Kartika",
+        "Lestari", "Muhammad", "Nadia", "Oki", "Putri", "Rian", "Siti", "Taufik", "Utami", "Wahyu",
+    ];
+    let last_names = [
+        "Pratama", "Saputra", "Wijaya", "Santoso", "Kusuma", "Hidayat", "Firmansyah", "Lestari",
+        "Nugroho", "Setiawan", "Utomo", "Wibowo", "Gunawan", "Susanto", "Siregar",
+    ];
+    let cities = [
+        "Jakarta", "Surabaya", "Bandung", "Medan", "Semarang", "Yogyakarta", "Malang", "Denpasar",
+        "Makassar", "Tangerang",
+    ];
+    let roles = [
+        "Software Engineer",
+        "Frontend Developer",
+        "Backend Engineer",
+        "Product Designer",
+        "Data Analyst",
+        "DevOps Engineer",
+        "QA Engineer",
+        "Product Manager",
+    ];
+    let product_names = [
+        "Mechanical Keyboard RGB",
+        "Wireless Ergonomic Mouse",
+        "4K Ultra-HD Monitor 27\"",
+        "Noise-Cancelling Headphones",
+        "USB-C Multiport Hub",
+        "Aluminium Laptop Stand",
+        "Webcam 1080p Pro",
+        "Desk Pad Leather",
+    ];
+    let categories = ["Electronics", "Accessories", "Audio", "Display", "Hardware"];
+
+    let output_str: String;
+
+    if as_csv {
+        let mut csv = String::new();
+        match mode.as_str() {
+            "product" | "products" => {
+                csv.push_str("id,name,category,price_idr,stock,rating\n");
+                for i in 1..=num {
+                    let name = product_names[(i - 1) % product_names.len()];
+                    let cat = categories[(i - 1) % categories.len()];
+                    let price = ((i * 125_000) % 2_500_000).max(150_000);
+                    let stock = (i * 17) % 150 + 5;
+                    let rating = 4.0 + ((i % 10) as f64 * 0.1);
+                    csv.push_str(&format!(
+                        "{},\"{}\",\"{}\",{},{},{:.1}\n",
+                        i, name, cat, price, stock, rating
+                    ));
+                }
+            }
+            _ => {
+                csv.push_str("id,name,email,phone,role,city\n");
+                for i in 1..=num {
+                    let first = first_names[(i - 1) % first_names.len()];
+                    let last = last_names[(i - 1) % last_names.len()];
+                    let full_name = format!("{} {}", first, last);
+                    let email = format!("{}.{}@example.com", first.to_lowercase(), last.to_lowercase());
+                    let phone = format!(
+                        "+62 812-{:04}-{:04}",
+                        (i * 137) % 9000 + 1000,
+                        (i * 941) % 9000 + 1000
+                    );
+                    let role = roles[(i - 1) % roles.len()];
+                    let city = cities[(i - 1) % cities.len()];
+                    csv.push_str(&format!(
+                        "{},\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
+                        i, full_name, email, phone, role, city
+                    ));
+                }
+            }
+        }
+        output_str = csv;
+    } else {
+        match mode.as_str() {
+            "product" | "products" => {
+                let mut items = Vec::new();
+                for i in 1..=num {
+                    let name = product_names[(i - 1) % product_names.len()];
+                    let cat = categories[(i - 1) % categories.len()];
+                    let price = ((i * 125_000) % 2_500_000).max(150_000);
+                    let stock = (i * 17) % 150 + 5;
+                    let rating = 4.0 + ((i % 10) as f64 * 0.1);
+                    items.push(serde_json::json!({
+                        "id": i,
+                        "name": name,
+                        "category": cat,
+                        "price_idr": price,
+                        "stock": stock,
+                        "rating": rating
+                    }));
+                }
+                output_str = serde_json::to_string_pretty(&items)?;
+            }
+            _ => {
+                let mut users = Vec::new();
+                for i in 1..=num {
+                    let first = first_names[(i - 1) % first_names.len()];
+                    let last = last_names[(i - 1) % last_names.len()];
+                    let full_name = format!("{} {}", first, last);
+                    let email = format!("{}.{}@example.com", first.to_lowercase(), last.to_lowercase());
+                    let phone = format!(
+                        "+62 812-{:04}-{:04}",
+                        (i * 137) % 9000 + 1000,
+                        (i * 941) % 9000 + 1000
+                    );
+                    let role = roles[(i - 1) % roles.len()];
+                    let city = cities[(i - 1) % cities.len()];
+                    users.push(serde_json::json!({
+                        "id": i,
+                        "name": full_name,
+                        "email": email,
+                        "phone": phone,
+                        "role": role,
+                        "city": city
+                    }));
+                }
+                output_str = serde_json::to_string_pretty(&users)?;
+            }
+        }
+    }
+
+    println!("{}", output_str);
+
+    if copy {
+        let _ = crate::mac::copy_to_clipboard(&output_str);
+        println!(
+            "{} Copied {} mock records to clipboard!",
+            "📋".green().bold(),
+            num
+        );
     }
 
     Ok(())

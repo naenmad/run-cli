@@ -515,11 +515,32 @@ enum Commands {
     #[command(name = "dns", alias = "fls", alias = "flush")]
     Dns,
 
-    /// Generate terminal visual Unicode QR code from text, URL, or clipboard
+    /// Enhanced QR code suite: terminal generator, PNG export, Wi-Fi share, Vision scan, and local drop
     #[command(name = "qr", alias = "qrc")]
     Qr {
-        /// Text or URL to encode
-        content: Option<String>,
+        /// Text or URL to encode, or submode (wifi, scan, share)
+        #[arg(trailing_var_arg = true)]
+        content: Vec<String>,
+
+        /// Export QR code to PNG file path
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Copy QR code image to macOS clipboard
+        #[arg(short, long)]
+        copy: bool,
+
+        /// Generate Wi-Fi network connection QR code
+        #[arg(long)]
+        wifi: bool,
+
+        /// Scan and decode QR code from screen or image
+        #[arg(long)]
+        scan: bool,
+
+        /// Share a file over local Wi-Fi with scannable QR code
+        #[arg(long)]
+        share: Option<PathBuf>,
     },
 
     /// One-step update for Homebrew, Rustup, and Node toolchains
@@ -576,6 +597,80 @@ enum Commands {
         /// Search or ask AI (Perplexity)
         #[arg(short = 'a', long = "ai")]
         ai: bool,
+    },
+
+    /// Extract text from screen selection or image file using Apple Neural Vision OCR
+    #[command(name = "ocr", alias = "txt", alias = "vision", alias = "scan-text")]
+    Ocr {
+        /// Optional path to image file (if omitted, screen selection crosshair is launched)
+        image: Option<PathBuf>,
+    },
+
+    /// Render image files directly inside the terminal with TrueColor ANSI half-blocks
+    #[command(name = "img", alias = "view", alias = "pic", alias = "photo")]
+    Img {
+        /// Path to image file (.png, .jpg, .webp, etc.)
+        file: PathBuf,
+
+        /// Maximum terminal columns width
+        #[arg(short, long)]
+        width: Option<u32>,
+    },
+
+    /// Color inspector, converter (HEX, RGB, HSL, Flutter), and macOS loupe eyedropper
+    #[command(name = "color", alias = "hex", alias = "rgb", alias = "picker")]
+    Color {
+        /// Color code to inspect (#3B82F6, rgb(59,130,246), or color name)
+        code: Option<String>,
+
+        /// Pick color interactively from anywhere on screen using macOS eyedropper loupe
+        #[arg(short, long)]
+        pick: bool,
+    },
+
+    /// Encrypt a file using authenticated AES-256-GCM and password
+    #[command(name = "encrypt", alias = "enc", alias = "crypt")]
+    Encrypt {
+        /// Path to file to encrypt
+        file: PathBuf,
+
+        /// Encryption password (prompted securely if not passed)
+        #[arg(short, long)]
+        password: Option<String>,
+    },
+
+    /// Decrypt a file previously encrypted with run encrypt
+    #[command(name = "decrypt", alias = "dec", alias = "uncrypt")]
+    Decrypt {
+        /// Path to encrypted file (.enc)
+        file: PathBuf,
+
+        /// Decryption password (prompted securely if not passed)
+        #[arg(short, long)]
+        password: Option<String>,
+    },
+
+    /// Scan local Wi-Fi / LAN network devices, IP addresses, and MACs via ARP
+    #[command(name = "lan", alias = "radar", alias = "subnet")]
+    Lan,
+
+    /// Instant developer mock & dummy data generator (users, products) in JSON/CSV
+    #[command(name = "mock", alias = "fake", alias = "dummy")]
+    Mock {
+        /// Entity type to generate: user (default), product
+        entity: Option<String>,
+
+        /// Number of mock records to generate (default: 5)
+        #[arg(short = 'n', long, default_value_t = 5)]
+        count: usize,
+
+        /// Output as CSV instead of JSON
+        #[arg(long)]
+        csv: bool,
+
+        /// Copy output directly to clipboard
+        #[arg(short, long)]
+        copy: bool,
     },
 
     /// Display complete command reference and usage tutorial
@@ -1033,6 +1128,48 @@ const ALL_COMMANDS: &[CommandInfo] = &[
         description: "Search the web or open URLs in your default browser",
     },
     CommandInfo {
+        name: "ocr",
+        alias_3: "txt",
+        aliases: &["txt", "vision", "scan-text"],
+        description: "Extract text from screen selection or image with Apple Neural Vision OCR",
+    },
+    CommandInfo {
+        name: "img",
+        alias_3: "pic",
+        aliases: &["view", "pic", "photo"],
+        description: "Render images directly inside the terminal with TrueColor ANSI half-blocks",
+    },
+    CommandInfo {
+        name: "color",
+        alias_3: "hex",
+        aliases: &["hex", "rgb", "picker"],
+        description: "Color inspector, converter (HEX, RGB, HSL, Flutter), and macOS eyedropper",
+    },
+    CommandInfo {
+        name: "encrypt",
+        alias_3: "enc",
+        aliases: &["enc", "crypt"],
+        description: "Encrypt files using military-grade authenticated AES-256-GCM and password",
+    },
+    CommandInfo {
+        name: "decrypt",
+        alias_3: "dec",
+        aliases: &["dec", "uncrypt"],
+        description: "Decrypt files previously encrypted with run encrypt",
+    },
+    CommandInfo {
+        name: "lan",
+        alias_3: "rad",
+        aliases: &["radar", "subnet"],
+        description: "Scan local Wi-Fi / LAN network devices, IP addresses, and MACs via ARP",
+    },
+    CommandInfo {
+        name: "mock",
+        alias_3: "fak",
+        aliases: &["fake", "dummy"],
+        description: "Generate developer mock & dummy data (users, products) in JSON/CSV",
+    },
+    CommandInfo {
         name: "help",
         alias_3: "doc",
         aliases: &["doc", "guide"],
@@ -1296,6 +1433,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
                 [
                     "project", "dev", "build", "test", "clean", "sync", "network", "share",
                     "bench", "docker", "secret", "config", "alias", "stats", "update", "uuid", "pass", "timer", "install", "browse",
+                    "ocr", "img", "color", "encrypt", "decrypt", "lan", "mock",
                 ]
                 .contains(&c.name)
             })
@@ -1341,6 +1479,7 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
                 [
                     "wifi", "bluetooth", "airpods", "airdrop", "port", "fetch", "ping", "pack",
                     "unpack", "speedtest", "notify", "shot", "completion", "qr", "dns", "uuid", "pass", "browse",
+                    "ocr", "img", "color", "encrypt", "decrypt", "lan", "mock",
                 ]
                 .contains(&c.name)
             })
@@ -1491,7 +1630,22 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
         Commands::Uuid => commands::handle_uuid(),
         Commands::Pass { length } => commands::handle_pass(theme, length),
         Commands::Dns => mac::handle_dns(theme),
-        Commands::Qr { content } => commands::handle_qr(theme, content.as_deref()),
+        Commands::Qr {
+            content,
+            output,
+            copy,
+            wifi,
+            scan,
+            share,
+        } => commands::handle_qr(
+            theme,
+            &content,
+            output.as_deref(),
+            copy,
+            wifi,
+            scan,
+            share.as_deref(),
+        ),
         Commands::Update => commands::handle_update(theme),
         Commands::Voice { text, voice } => {
             mac::handle_voice(theme, text.as_deref(), voice.as_deref())
@@ -1519,6 +1673,22 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
                 ai,
             },
         ),
+        Commands::Ocr { image } => commands::handle_ocr(image.as_deref()),
+        Commands::Img { file, width } => commands::handle_img(&file, width),
+        Commands::Color { code, pick } => commands::handle_color(theme, code.as_deref(), pick),
+        Commands::Encrypt { file, password } => {
+            commands::handle_encrypt(theme, &file, password.as_deref())
+        }
+        Commands::Decrypt { file, password } => {
+            commands::handle_decrypt(theme, &file, password.as_deref())
+        }
+        Commands::Lan => commands::handle_lan(theme),
+        Commands::Mock {
+            entity,
+            count,
+            csv,
+            copy,
+        } => commands::handle_mock(entity.as_deref(), count, csv, copy),
         Commands::Help { command } => handle_help(command.as_deref()),
     }
 }
@@ -1619,6 +1789,13 @@ fn run_app() -> Result<()> {
                 Commands::Voice { .. } => "voice",
                 Commands::Install { .. } => "install",
                 Commands::Browse { .. } => "browse",
+                Commands::Ocr { .. } => "ocr",
+                Commands::Img { .. } => "img",
+                Commands::Color { .. } => "color",
+                Commands::Encrypt { .. } => "encrypt",
+                Commands::Decrypt { .. } => "decrypt",
+                Commands::Lan => "lan",
+                Commands::Mock { .. } => "mock",
                 Commands::Help { .. } => "help",
             };
             config::record_command_stat(cmd_name);
@@ -3767,6 +3944,93 @@ fn print_command_detail(cmd: &str) {
             println!("  run web ai <query>        Ask AI (Perplexity)");
             println!("  run web                   Search clipboard text or enter prompt");
         }
+        "qr" | "qrc" => {
+            println!(
+                "{} qr (alias: qrc)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Enhanced QR code suite: terminal generator, PNG export, Wi-Fi sharing, screen scan, and local drop.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run qr <text|url>         Generate terminal visual Unicode QR code");
+            println!("  run qr <text> -o out.png  Export high-res QR code as PNG image");
+            println!("  run qr <text> -c          Copy QR code image to macOS clipboard");
+            println!("  run qr wifi               Auto-detect active Wi-Fi & generate scannable join QR");
+            println!("  run qr scan               Snip screen selection or image file and decode QR code");
+            println!("  run qr share <file>       Ephemeral local Wi-Fi download server with QR code");
+        }
+        "ocr" | "txt" | "vision" | "scan-text" => {
+            println!(
+                "{} ocr (aliases: txt, vision, scan-text)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Extract text from screen selection or image file using Apple Vision Neural OCR.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run ocr                   Drag and select screen area with crosshair to extract text");
+            println!("  run ocr <image_path>      Extract text from image file (.png, .jpg, etc.)");
+        }
+        "img" | "view" | "pic" | "photo" => {
+            println!(
+                "{} img (aliases: view, pic, photo)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Render images directly inside the terminal using TrueColor ANSI half-blocks.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run img <image_path>      Render image in terminal with true 24-bit colors");
+            println!("  run img <path> -w 60      Render image with custom maximum columns width");
+        }
+        "color" | "hex" | "rgb" | "picker" => {
+            println!(
+                "{} color (aliases: hex, rgb, picker)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Color inspector, converter (HEX, RGB, HSL, Flutter), and macOS eyedropper loupe.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run color #3B82F6         Inspect color, show truecolor swatch, and convert formats");
+            println!("  run color rgb(59,130,246) Inspect RGB or HSL color");
+            println!("  run color --pick          Launch macOS magnifying glass loupe to pick any pixel");
+            println!("  run hex                   Interactive color inspector");
+        }
+        "encrypt" | "enc" | "crypt" => {
+            println!(
+                "{} encrypt (aliases: enc, crypt)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Encrypt a file using authenticated AES-256-GCM and password.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run encrypt .env          Prompt for password and encrypt to .env.enc");
+            println!("  run enc secret.txt -p pass Direct password encryption");
+        }
+        "decrypt" | "dec" | "uncrypt" => {
+            println!(
+                "{} decrypt (aliases: dec, uncrypt)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Decrypt a file previously encrypted with run encrypt.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run decrypt .env.enc      Prompt for password and decrypt to original file");
+        }
+        "lan" | "radar" | "subnet" => {
+            println!(
+                "{} lan (aliases: radar, subnet)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Scan local Wi-Fi / LAN network devices, IP addresses, and MACs via ARP.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run lan                   Display table of all active devices on your Wi-Fi");
+            println!("  run radar                 Alias");
+        }
+        "mock" | "fake" | "dummy" => {
+            println!(
+                "{} mock (aliases: fake, dummy)",
+                electric_blue("COMMAND:").bold()
+            );
+            println!("Instant developer mock & dummy data generator in JSON or CSV.\n");
+            println!("{}", electric_blue("USAGE:").bold());
+            println!("  run mock user 5           Generate 5 mock users in JSON");
+            println!("  run mock product 10       Generate 10 mock products in JSON");
+            println!("  run mock user 5 --csv     Output in CSV format");
+            println!("  run mock user 5 -c        Copy output directly to macOS clipboard");
+        }
         other => {
             println!("No dedicated topic found for '{}'.", other);
             print_main_help();
@@ -4584,8 +4848,8 @@ mod tests {
         assert!(matches!(
             Cli::try_parse_from(["run", "qr", "https://github.com"]),
             Ok(Cli {
-                command: Some(Commands::Qr { ref content })
-            }) if content.as_deref() == Some("https://github.com")
+                command: Some(Commands::Qr { ref content, .. })
+            }) if content == &["https://github.com"]
         ));
 
         assert!(matches!(
@@ -4685,6 +4949,77 @@ mod tests {
                 command: Some(Commands::Browse { ref query, so: true, .. })
             }) if query == &["error[E0382]"]
         ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "ocr"]),
+            Ok(Cli {
+                command: Some(Commands::Ocr { image: None })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "img", "photo.png", "-w", "60"]),
+            Ok(Cli {
+                command: Some(Commands::Img { ref file, width: Some(60) })
+            }) if file == std::path::Path::new("photo.png")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "color", "#3B82F6"]),
+            Ok(Cli {
+                command: Some(Commands::Color { ref code, pick: false })
+            }) if code.as_deref() == Some("#3B82F6")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "color", "--pick"]),
+            Ok(Cli {
+                command: Some(Commands::Color { pick: true, .. })
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "encrypt", "secret.txt"]),
+            Ok(Cli {
+                command: Some(Commands::Encrypt { ref file, .. })
+            }) if file == std::path::Path::new("secret.txt")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "decrypt", "secret.txt.enc"]),
+            Ok(Cli {
+                command: Some(Commands::Decrypt { ref file, .. })
+            }) if file == std::path::Path::new("secret.txt.enc")
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "lan"]),
+            Ok(Cli {
+                command: Some(Commands::Lan)
+            })
+        ));
+
+        assert!(matches!(
+            Cli::try_parse_from(["run", "mock", "product", "-n", "10", "--csv"]),
+            Ok(Cli {
+                command: Some(Commands::Mock { ref entity, count: 10, csv: true, .. })
+            }) if entity.as_deref() == Some("product")
+        ));
+    }
+
+    #[test]
+    fn test_color_suite_parsing() {
+        let c1 = commands::parse_color_string("#3B82F6").unwrap();
+        assert_eq!((c1.r, c1.g, c1.b), (0x3B, 0x82, 0xF6));
+
+        let c2 = commands::parse_color_string("#FFF").unwrap();
+        assert_eq!((c2.r, c2.g, c2.b), (255, 255, 255));
+
+        let c3 = commands::parse_color_string("rgb(10, 20, 30)").unwrap();
+        assert_eq!((c3.r, c3.g, c3.b), (10, 20, 30));
+
+        let c4 = commands::parse_color_string("red").unwrap();
+        assert_eq!((c4.r, c4.g, c4.b), (239, 68, 68));
     }
 
     #[test]
