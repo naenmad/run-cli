@@ -671,6 +671,10 @@ enum Commands {
         #[arg(long)]
         csv: bool,
 
+        /// Output format as JSON (default)
+        #[arg(long)]
+        json: bool,
+
         /// Copy output directly to clipboard
         #[arg(short, long)]
         copy: bool,
@@ -1691,6 +1695,7 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
             num,
             count,
             csv,
+            json: _,
             copy,
         } => {
             let actual_count = num.or(count).unwrap_or(5);
@@ -4049,6 +4054,7 @@ fn print_command_detail(cmd: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::CommandFactory;
 
     #[test]
     fn test_custom_theme() {
@@ -5123,5 +5129,149 @@ mod tests {
 
         // Typo match (Levenshtein distance <= 3): whasap -> WhatsApp
         assert_eq!(find_matching_apps("whasap", &installed), vec!["WhatsApp"]);
+    }
+
+    #[test]
+    fn test_dynamic_all_commands_clap_and_metadata_symmetry() {
+        // Built-in Clap verification: checks argument conflicts, types, short/long flags
+        Cli::command().debug_assert();
+
+        let clap_cmd = Cli::command();
+        let clap_subcommands: std::collections::HashSet<String> = clap_cmd
+            .get_subcommands()
+            .map(|s| s.get_name().to_string())
+            .collect();
+
+        let all_meta_commands: std::collections::HashSet<String> = ALL_COMMANDS
+            .iter()
+            .map(|c| c.name.to_string())
+            .collect();
+
+        // 1. Check if any Clap command is missing from metadata registry
+        for cmd_name in &clap_subcommands {
+            assert!(
+                all_meta_commands.contains(cmd_name),
+                "Subcommand '{}' found in Clap but missing in ALL_COMMANDS registry! Please add it to ALL_COMMANDS in src/main.rs.",
+                cmd_name
+            );
+        }
+
+        // 2. Check if any metadata registry command is missing from Clap subcommands
+        for cmd_name in &all_meta_commands {
+            assert!(
+                clap_subcommands.contains(cmd_name),
+                "Command '{}' found in ALL_COMMANDS registry but missing from Clap Commands enum!",
+                cmd_name
+            );
+        }
+
+        assert_eq!(
+            clap_subcommands.len(),
+            all_meta_commands.len(),
+            "Clap subcommands count ({}) must match ALL_COMMANDS count ({})",
+            clap_subcommands.len(),
+            all_meta_commands.len()
+        );
+
+        // 3. Dynamically verify every subcommand and its aliases can generate --help without panic
+        for sub in clap_cmd.get_subcommands() {
+            let name = sub.get_name();
+
+            // Subcommand --help check
+            let res = Cli::try_parse_from(["run", name, "--help"]);
+            match res {
+                Err(e) if e.kind() == clap::error::ErrorKind::DisplayHelp => (),
+                Err(e) => panic!("Command '{} --help' returned error: {}", name, e),
+                Ok(_) => panic!("Command '{} --help' succeeded without displaying help", name),
+            }
+
+            // Description check
+            let about = sub.get_about();
+            assert!(
+                about.is_some() && !about.unwrap().to_string().trim().is_empty(),
+                "Command '{}' must have a non-empty description",
+                name
+            );
+
+            // Aliases --help check
+            for alias in sub.get_all_aliases() {
+                let alias_res = Cli::try_parse_from(["run", alias, "--help"]);
+                match alias_res {
+                    Err(e) if e.kind() == clap::error::ErrorKind::DisplayHelp => (),
+                    Err(e) => panic!("Alias '{}' of command '{}' failed to parse --help: {}", alias, name, e),
+                    Ok(_) => panic!("Alias '{}' of command '{}' --help succeeded without displaying help", alias, name),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_dynamic_alias_uniqueness_and_resolution() {
+        let theme = custom_theme();
+        let mut seen_alias_3 = std::collections::HashMap::new();
+
+        for cmd in ALL_COMMANDS {
+            // Verify alias_3 is unique across all commands
+            if let Some(prev_cmd) = seen_alias_3.insert(cmd.alias_3, cmd.name) {
+                panic!(
+                    "Collision detected: alias_3 '{}' is used by both '{}' and '{}'",
+                    cmd.alias_3, prev_cmd, cmd.name
+                );
+            }
+
+            // Test alias_3 resolves to cmd.name
+            let resolved = resolve_command_args_internal(&theme, &["run".into(), cmd.alias_3.into()], false).unwrap();
+            assert_eq!(
+                resolved,
+                Some(vec!["run".to_string(), cmd.name.to_string()]),
+                "alias_3 '{}' failed to resolve to '{}'",
+                cmd.alias_3,
+                cmd.name
+            );
+
+            // Test every alias in cmd.aliases resolves to cmd.name
+            for &alias in cmd.aliases {
+                let resolved = resolve_command_args_internal(&theme, &["run".into(), (*alias).into()], false).unwrap();
+                assert_eq!(
+                    resolved,
+                    Some(vec!["run".to_string(), cmd.name.to_string()]),
+                    "Alias '{}' failed to resolve to '{}'",
+                    alias,
+                    cmd.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_dynamic_typo_and_prefix_resilience() {
+        let theme = custom_theme();
+
+        for cmd in ALL_COMMANDS {
+            // Exact name resolves to itself
+            let resolved = resolve_command_args_internal(&theme, &["run".into(), cmd.name.into()], false).unwrap();
+            assert_eq!(
+                resolved,
+                Some(vec!["run".to_string(), cmd.name.to_string()]),
+                "Command '{}' failed to resolve to itself",
+                cmd.name
+            );
+
+            // Prefix match: if unique prefix of length >= 5
+            if cmd.name.len() >= 5 {
+                let prefix = &cmd.name[..cmd.name.len() - 1];
+                let is_ambiguous = ALL_COMMANDS.iter().filter(|c| c.name.starts_with(prefix)).count() > 1;
+                if !is_ambiguous {
+                    let resolved = resolve_command_args_internal(&theme, &["run".into(), prefix.into()], false).unwrap();
+                    assert_eq!(
+                        resolved,
+                        Some(vec!["run".to_string(), cmd.name.to_string()]),
+                        "Unique prefix '{}' failed to resolve to '{}'",
+                        prefix,
+                        cmd.name
+                    );
+                }
+            }
+        }
     }
 }
