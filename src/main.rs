@@ -660,9 +660,12 @@ enum Commands {
         /// Entity type to generate: user (default), product
         entity: Option<String>,
 
+        /// Optional record count (e.g. run mock user 10)
+        num: Option<usize>,
+
         /// Number of mock records to generate (default: 5)
-        #[arg(short = 'n', long, default_value_t = 5)]
-        count: usize,
+        #[arg(short = 'n', long)]
+        count: Option<usize>,
 
         /// Output as CSV instead of JSON
         #[arg(long)]
@@ -1685,10 +1688,14 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
         Commands::Lan => commands::handle_lan(theme),
         Commands::Mock {
             entity,
+            num,
             count,
             csv,
             copy,
-        } => commands::handle_mock(entity.as_deref(), count, csv, copy),
+        } => {
+            let actual_count = num.or(count).unwrap_or(5);
+            commands::handle_mock(entity.as_deref(), actual_count, csv, copy)
+        }
         Commands::Help { command } => handle_help(command.as_deref()),
     }
 }
@@ -5000,9 +5007,9 @@ mod tests {
         ));
 
         assert!(matches!(
-            Cli::try_parse_from(["run", "mock", "product", "-n", "10", "--csv"]),
+            Cli::try_parse_from(["run", "mock", "product", "10", "--csv"]),
             Ok(Cli {
-                command: Some(Commands::Mock { ref entity, count: 10, csv: true, .. })
+                command: Some(Commands::Mock { ref entity, num: Some(10), csv: true, .. })
             }) if entity.as_deref() == Some("product")
         ));
     }
