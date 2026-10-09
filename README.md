@@ -20,7 +20,7 @@
 
 ## ⚡ Why `run`?
 
-Standard Unix commands are cryptic and filled with archaic flags (`lsof -iTCP -sTCP:LISTEN -P`, `tar -czvf`, `find . -name`, `kill -9`). 
+Standard Unix commands can be cryptic with archaic flags (`lsof -iTCP -sTCP:LISTEN -P`, `tar -czvf`, `find . -name`, `kill -9`). 
 
 `run` reimagines terminal productivity for modern developers:
 * **Semantic Verbs + 3-Letter Aliases**: Every action is intuitive (`make`/`mak`, `remove`/`rmv`, `port`/`prt`, `fetch`/`fch`, `clean`/`cln`).
@@ -123,7 +123,7 @@ custom_hubs = [
 
 ## 🎯 Command Cheatsheet
 
-`run` includes **77 productivity commands** categorized below. Every single command supports its full semantic name and exact 3-letter alias:
+`run` includes **77 productivity commands** categorized below. See [COMMANDS.md](COMMANDS.md) for the full detailed reference guide.
 
 ### 🍏 macOS Native Interaction Suite (Dual-Mode: Direct & Interactive)
 | Command | Alias | Additional Aliases | Purpose & Highlights |
@@ -157,9 +157,9 @@ custom_hubs = [
 | `install` | `ins`, `deps`, `setup`, `i` | Auto-detect stack & lockfile to install dependencies, or add packages (`run ins`, `run i express -D`) |
 | `color` | `hex`, `rgb`, `picker` | Color inspector, converter (HEX, RGB, HSL, Flutter), and macOS loupe eyedropper (`run color #3B82F6`, `run color --pick`) |
 | `img` | `pic`, `view`, `photo` | Render images directly inside terminal with 24-bit TrueColor ANSI half-blocks (`run img logo.png`) |
-| `encrypt` | `enc`, `crypt` | Encrypt files using military-grade authenticated AES-256-GCM and password (`run encrypt .env`) |
+| `encrypt` | `enc`, `crypt` | Encrypt files using authenticated AES-256-GCM and password (`run encrypt .env`) |
 | `decrypt` | `dec`, `uncrypt` | Decrypt files previously encrypted with `run encrypt` (`run decrypt .env.enc`) |
-| `mock` | `fak`, `fake`, `dummy` | Instant developer mock & dummy data generator in JSON/CSV (`run mock user 5`, `run mock product 10 --csv`) |
+| `mock` | `fak`, `fake`, `dummy` | Developer mock & dummy data generator in JSON/CSV (`run mock user 5`, `run mock product 10 --csv`) |
 | `project` | `prj` | Scan project directories & open in **Antigravity**, **VS Code**, **Cursor**, **Xcode**, or terminal |
 | `dev` | `dev` | Auto-detects project stack (`cargo`, `npm`, `pnpm`, `flutter`, `go`) and starts dev server |
 | `build` | `bld` | Compiles active project in release mode |
@@ -179,7 +179,7 @@ custom_hubs = [
 | `share` | `shr` | Instant local HTTP file server on LAN (`run share -p 8080`) |
 | `bench` | `bnc` | Microsecond-precision command execution benchmark timer |
 
-### 📂 Filesystem & Navigation
+### 📁 Filesystem & Navigation
 | Command | Alias | Unix Alias | Purpose |
 | :--- | :--- | :--- | :--- |
 | `go` | `jmp` | `cd`, `nav` | Fast jump to root (`~`), back (`..`), subdirectories, or fuzzy hub picker |
@@ -257,18 +257,31 @@ $ run
 
 ## 🤝 Contributing
 
-Contributions, bug reports, and suggestions are welcome!
+Contributions, bug reports, and suggestions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before submitting pull requests.
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Ensure all tests and clippy pass:
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Ensure all tests, formatting, and clippy checks pass:
    ```bash
-   cargo test
+   cargo fmt --all -- --check
    cargo clippy --all-targets -- -D warnings
+   cargo test
    ```
 5. Push to your branch (`git push origin feature/amazing-feature`)
 6. Open a Pull Request
+
+---
+
+## 🔒 Security
+
+For details on reporting security vulnerabilities, please refer to our [Security Policy](SECURITY.md).
+
+---
+
+## 📖 Architecture & Design
+
+Learn more about the design philosophy and naming rules in [DESIGN.md](DESIGN.md), and explore all commands in [COMMANDS.md](COMMANDS.md).
 
 ---
 

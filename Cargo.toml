@@ -5,6 +5,7 @@ edition = "2024"
 description = "Lightning-fast, intuitive productivity CLI utility with dual-mode interaction and developer workflows"
 repository = "https://github.com/naenmad/run-cli"
 homepage = "https://github.com/naenmad/run-cli"
+documentation = "https://github.com/naenmad/run-cli#readme"
 license = "MIT"
 readme = "README.md"
 keywords = ["cli", "productivity", "developer-tools", "terminal", "workflow"]

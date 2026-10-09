@@ -1,6 +1,6 @@
 # Complete Command Reference: `run` CLI
 
-`run` is a clean, human-friendly macOS productivity CLI built in Rust. Every command provides a full semantic English verb/noun, an exact 3-letter alias, and standard Unix alias compatibility for effortless workflow integration.
+`run` is a clean, human-friendly macOS productivity CLI built in Rust. Every command provides a full semantic English verb/noun, an exact 3-letter alias, and standard Unix alias compatibility for smooth workflow integration.
 
 ---
 
@@ -118,11 +118,11 @@
 
 ## Smart Interaction, Prefix Matching & Anti-Typo
 
-`run` is designed to delight users with effortless and fast interactions:
+`run` is designed for fast, ergonomic terminal interactions:
 
 1. **Bare `run` Fallback Menu:**
    - Running `run` without any arguments automatically displays an interactive selection menu listing all available commands and their 3-letter aliases with descriptions.
-   - Selecting any command seamlessly launches into its interactive mode.
+   - Selecting any command launches directly into its interactive mode.
    - The last option is always **Cancel** highlighted in high-contrast red.
 
 2. **Smart Prefix Matching:**
@@ -137,7 +137,7 @@
    - Selecting one immediately continues execution with your remaining arguments intact.
 
 4. **Levenshtein Distance Anti-Typo:**
-   - If an unrecognized command is typed (e.g., `run fethc` or `run pak`), `run` calculates edit distances and prompts you with likely matches. If only one command is close, it seamlessly corrects.
+   - If an unrecognized command is typed (e.g., `run fethc` or `run pak`), `run` calculates edit distances and prompts you with likely matches. If only one command is close, it corrects automatically.
 
 ---
 
