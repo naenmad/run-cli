@@ -86,7 +86,8 @@ pub fn handle_wifi(
             scan_and_display_wifi(theme, &dev)?;
         }
         Some("connect") => {
-            let ssid = arg1.context("missing Wi-Fi network SSID (e.g. 'run wifi connect MySSID')")?;
+            let ssid =
+                arg1.context("missing Wi-Fi network SSID (e.g. 'run wifi connect MySSID')")?;
             connect_wifi(&dev, ssid, arg2)?;
         }
         Some("pass") | Some("password") => {
@@ -100,9 +101,23 @@ pub fn handle_wifi(
                 bail!("not connected to Wi-Fi. Provide an SSID: run wifi pass <SSID>");
             }
 
-            println!("{}", format!("Fetching saved password for '{}' from macOS Keychain...", target_ssid).dimmed());
+            println!(
+                "{}",
+                format!(
+                    "Fetching saved password for '{}' from macOS Keychain...",
+                    target_ssid
+                )
+                .dimmed()
+            );
             let output = Command::new("security")
-                .args(["find-generic-password", "-D", "AirPort network password", "-a", &target_ssid, "-w"])
+                .args([
+                    "find-generic-password",
+                    "-D",
+                    "AirPort network password",
+                    "-a",
+                    &target_ssid,
+                    "-w",
+                ])
                 .output()?;
 
             if output.status.success() {
@@ -127,7 +142,10 @@ pub fn handle_wifi(
         }
         Some("status") | None => {
             let ssid = get_current_wifi_ssid(&dev).unwrap_or_else(|| "Not Connected".to_string());
-            let ip_out = Command::new("ipconfig").args(["getifaddr", &dev]).output().ok();
+            let ip_out = Command::new("ipconfig")
+                .args(["getifaddr", &dev])
+                .output()
+                .ok();
             let ip = ip_out
                 .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
                 .filter(|s| !s.is_empty())
@@ -141,8 +159,22 @@ pub fn handle_wifi(
                 "Wireless Connection Status",
                 &[
                     ("Interface", dev.clone()),
-                    ("Status", if is_connected { "Connected 🟢".green().to_string() } else { "Disconnected ⚪".dimmed().to_string() }),
-                    ("Current SSID", if is_connected { ssid.bold().to_string() } else { ssid.dimmed().to_string() }),
+                    (
+                        "Status",
+                        if is_connected {
+                            "Connected 🟢".green().to_string()
+                        } else {
+                            "Disconnected ⚪".dimmed().to_string()
+                        },
+                    ),
+                    (
+                        "Current SSID",
+                        if is_connected {
+                            ssid.bold().to_string()
+                        } else {
+                            ssid.dimmed().to_string()
+                        },
+                    ),
                     ("Local IP", ip),
                 ],
             );
@@ -190,7 +222,9 @@ pub fn handle_wifi(
             }
         }
         Some(other) => {
-            bail!("unknown wifi action '{other}'. Usage: run wifi [status|scan|connect|pass|on|off]");
+            bail!(
+                "unknown wifi action '{other}'. Usage: run wifi [status|scan|connect|pass|on|off]"
+            );
         }
     }
     Ok(())
@@ -203,7 +237,11 @@ fn get_current_wifi_ssid(dev: &str) -> Option<String> {
         .ok()?;
     let text = String::from_utf8_lossy(&output.stdout);
     if text.contains("Current Wi-Fi Network:") {
-        Some(text.replace("Current Wi-Fi Network:", "").trim().to_string())
+        Some(
+            text.replace("Current Wi-Fi Network:", "")
+                .trim()
+                .to_string(),
+        )
     } else {
         None
     }
@@ -215,19 +253,24 @@ fn is_wifi_powered(dev: &str) -> bool {
         .output()
         .ok();
     if let Some(out) = output {
-        String::from_utf8_lossy(&out.stdout).to_lowercase().contains(": on")
+        String::from_utf8_lossy(&out.stdout)
+            .to_lowercase()
+            .contains(": on")
     } else {
         false
     }
 }
 
 fn scan_and_display_wifi(theme: &ColorfulTheme, dev: &str) -> Result<()> {
-    let airport_path = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Commands/airport";
+    let airport_path =
+        "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Commands/airport";
     println!("{}", "Scanning nearby Wi-Fi networks (2-3s)...".dimmed());
 
     let output = Command::new(airport_path).arg("-s").output();
     let Ok(out) = output else {
-        println!("Airport scanner binary unavailable. You can connect directly: run wifi connect <SSID>");
+        println!(
+            "Airport scanner binary unavailable. You can connect directly: run wifi connect <SSID>"
+        );
         return Ok(());
     };
 
@@ -278,11 +321,18 @@ fn scan_and_display_wifi(theme: &ColorfulTheme, dev: &str) -> Result<()> {
 
     let target_ssid = &ssids[sel];
     let password: String = Input::with_theme(theme)
-        .with_prompt(format!("Password for '{}' (leave blank if open/saved)", target_ssid))
+        .with_prompt(format!(
+            "Password for '{}' (leave blank if open/saved)",
+            target_ssid
+        ))
         .allow_empty(true)
         .interact_text()?;
 
-    let pass_opt = if password.trim().is_empty() { None } else { Some(password.as_str()) };
+    let pass_opt = if password.trim().is_empty() {
+        None
+    } else {
+        Some(password.as_str())
+    };
     connect_wifi(dev, target_ssid, pass_opt)
 }
 
@@ -295,7 +345,11 @@ fn connect_wifi(dev: &str, ssid: &str, password: Option<&str>) -> Result<()> {
     }
     let status = cmd.status()?;
     if status.success() {
-        println!("{} Connected to Wi-Fi network '{}'!", "✔".green().bold(), ssid.bold());
+        println!(
+            "{} Connected to Wi-Fi network '{}'!",
+            "✔".green().bold(),
+            ssid.bold()
+        );
     } else {
         bail!("failed to connect to '{ssid}'. Please verify password.");
     }
@@ -311,7 +365,8 @@ pub fn handle_bluetooth(theme: &ColorfulTheme, action: Option<&str>) -> Result<(
 
     match action {
         Some("on") => {
-            let script = "tell application \"System Events\" to tell process \"ControlCenter\" to click";
+            let script =
+                "tell application \"System Events\" to tell process \"ControlCenter\" to click";
             let _ = run_osascript(script);
             println!("Bluetooth power toggle requested.");
         }
@@ -358,7 +413,14 @@ pub fn handle_bluetooth(theme: &ColorfulTheme, action: Option<&str>) -> Result<(
             ui::print_card(
                 "Bluetooth Controller",
                 &[
-                    ("Controller State", if state.to_lowercase().contains("on") { "On 🟢".green().to_string() } else { state }),
+                    (
+                        "Controller State",
+                        if state.to_lowercase().contains("on") {
+                            "On 🟢".green().to_string()
+                        } else {
+                            state
+                        },
+                    ),
                     ("Connected Devices", dev_str),
                 ],
             );
@@ -379,7 +441,9 @@ pub fn handle_bluetooth(theme: &ColorfulTheme, action: Option<&str>) -> Result<(
                 if sel == 0 {
                     handle_airpods(theme)?;
                 } else if sel == 1 {
-                    let _ = Command::new("open").arg("x-apple.systempreferences:com.apple.BluetoothSettings").status();
+                    let _ = Command::new("open")
+                        .arg("x-apple.systempreferences:com.apple.BluetoothSettings")
+                        .status();
                 }
             }
         }
@@ -405,14 +469,18 @@ pub fn handle_airpods(theme: &ColorfulTheme) -> Result<()> {
         "{} Audio device menu activated in Control Center.",
         "✔".green().bold()
     );
-    println!("Tip: Select your AirPods from the native sound menu, or press any key to open Bluetooth settings.");
+    println!(
+        "Tip: Select your AirPods from the native sound menu, or press any key to open Bluetooth settings."
+    );
     if std::io::stdin().is_terminal() {
         let should_open = Confirm::with_theme(theme)
             .with_prompt("Open Bluetooth settings to pair or reconnect?")
             .default(false)
             .interact()?;
         if should_open {
-            let _ = Command::new("open").arg("x-apple.systempreferences:com.apple.BluetoothSettings").status();
+            let _ = Command::new("open")
+                .arg("x-apple.systempreferences:com.apple.BluetoothSettings")
+                .status();
         }
     }
     Ok(())
@@ -430,12 +498,17 @@ pub fn handle_airdrop(theme: &ColorfulTheme, file: Option<PathBuf>) -> Result<()
 
         let abs_path = fs::canonicalize(&target_file)?;
         let abs_str = abs_path.to_string_lossy();
-        println!("{}", format!("Triggering AirDrop sharing for '{}'...", target_file.display()).dimmed());
+        println!(
+            "{}",
+            format!(
+                "Triggering AirDrop sharing for '{}'...",
+                target_file.display()
+            )
+            .dimmed()
+        );
 
         // Use native AppleScript share sheet or sharing utility
-        let script = format!(
-            r#"tell application "Finder" to open POSIX file "{abs_str}""#
-        );
+        let script = format!(r#"tell application "Finder" to open POSIX file "{abs_str}""#);
         let _ = run_osascript(&script);
 
         // Also trigger sharing service
@@ -443,7 +516,11 @@ pub fn handle_airdrop(theme: &ColorfulTheme, file: Option<PathBuf>) -> Result<()
             .args(["-s", "com.apple.AirDrop", "-d", &abs_str])
             .status();
 
-        println!("{} AirDrop share sheet opened for {}.", "✔".green().bold(), target_file.display().to_string().bold());
+        println!(
+            "{} AirDrop share sheet opened for {}.",
+            "✔".green().bold(),
+            target_file.display().to_string().bold()
+        );
         return Ok(());
     }
 
@@ -474,7 +551,10 @@ pub fn handle_airdrop(theme: &ColorfulTheme, file: Option<PathBuf>) -> Result<()
     match sel {
         0 => {
             let _ = Command::new("open").arg("-a").arg("AirDrop").status();
-            println!("{} Native AirDrop window opened in Finder!", "✔".green().bold());
+            println!(
+                "{} Native AirDrop window opened in Finder!",
+                "✔".green().bold()
+            );
         }
         1 => {
             let cur_dir = std::env::current_dir()?;
@@ -566,7 +646,8 @@ pub fn handle_music(theme: &ColorfulTheme, action: Option<&str>) -> Result<()> {
                 end if
             "#;
 
-            let res = run_osascript(script).unwrap_or_else(|_| "not_running|||None|||None|||None".to_string());
+            let res = run_osascript(script)
+                .unwrap_or_else(|_| "not_running|||None|||None|||None".to_string());
             let parts: Vec<&str> = res.split("|||").collect();
             let state = parts.first().copied().unwrap_or("not_running");
             let track = parts.get(1).copied().unwrap_or("-");
@@ -641,13 +722,19 @@ pub fn handle_volume(theme: &ColorfulTheme, level: Option<&str>) -> Result<()> {
             return Ok(());
         }
 
-        let num: u8 = clean.parse().context("volume must be an integer between 0 and 100 or 'mute'/'unmute'")?;
+        let num: u8 = clean
+            .parse()
+            .context("volume must be an integer between 0 and 100 or 'mute'/'unmute'")?;
         if num > 100 {
             bail!("volume cannot exceed 100%");
         }
         let script = format!("set volume output volume {num}");
         run_osascript(&script)?;
-        println!("{} Volume set to {}%.", "✔".green().bold(), num.to_string().bold());
+        println!(
+            "{} Volume set to {}%.",
+            "✔".green().bold(),
+            num.to_string().bold()
+        );
         return Ok(());
     }
 
@@ -657,7 +744,8 @@ pub fn handle_volume(theme: &ColorfulTheme, level: Option<&str>) -> Result<()> {
         .parse::<u8>()
         .unwrap_or(50);
     let is_muted = run_osascript("output muted of (get volume settings)")
-        .unwrap_or_else(|_| "false".to_string()) == "true";
+        .unwrap_or_else(|_| "false".to_string())
+        == "true";
 
     ui::maybe_auto_clear();
     ui::print_banner();
@@ -674,7 +762,14 @@ pub fn handle_volume(theme: &ColorfulTheme, level: Option<&str>) -> Result<()> {
         "macOS Audio Output",
         &[
             ("Current Volume", vol_gauge),
-            ("Mute Status", if is_muted { "Muted 🔇".red().to_string() } else { "Unmuted 🔊".green().to_string() }),
+            (
+                "Mute Status",
+                if is_muted {
+                    "Muted 🔇".red().to_string()
+                } else {
+                    "Unmuted 🔊".green().to_string()
+                },
+            ),
         ],
     );
 
@@ -801,10 +896,7 @@ fn save_quick_note(text: &str) -> Result<()> {
 // ============================================================================
 
 pub fn handle_fixapp(theme: &ColorfulTheme, app_name: Option<&str>) -> Result<()> {
-    let scan_dirs = [
-        PathBuf::from("/Applications"),
-        dirs_home_apps(),
-    ];
+    let scan_dirs = [PathBuf::from("/Applications"), dirs_home_apps()];
 
     let mut found_apps: Vec<PathBuf> = Vec::new();
     for dir in &scan_dirs {
@@ -884,7 +976,10 @@ fn dirs_home_apps() -> PathBuf {
 
 fn fix_quarantine(app_path: &Path) -> Result<()> {
     let display_name = app_path.file_name().unwrap().to_string_lossy();
-    println!("{}", format!("Removing quarantine attributes from {}...", display_name).dimmed());
+    println!(
+        "{}",
+        format!("Removing quarantine attributes from {}...", display_name).dimmed()
+    );
 
     let status = Command::new("xattr")
         .args(["-cr", &app_path.to_string_lossy()])
@@ -914,7 +1009,9 @@ pub fn handle_battery(_theme: &ColorfulTheme) -> Result<()> {
     ui::render_breadcrumbs(&["run", "Battery Health"]);
 
     let output = Command::new("pmset").args(["-g", "batt"]).output();
-    let text = output.map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
+    let text = output
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
 
     let mut percent = "Unknown".to_string();
     let mut status = "Unknown".to_string();
@@ -923,7 +1020,11 @@ pub fn handle_battery(_theme: &ColorfulTheme) -> Result<()> {
 
     for line in text.lines() {
         if line.contains("Now drawing from") {
-            power_source = if line.contains("AC Power") { "AC Power Charger ⚡".to_string() } else { "Internal Battery 🔋".to_string() };
+            power_source = if line.contains("AC Power") {
+                "AC Power Charger ⚡".to_string()
+            } else {
+                "Internal Battery 🔋".to_string()
+            };
         } else if line.contains('%') {
             let parts: Vec<&str> = line.split('\t').collect();
             if parts.len() > 1 {
@@ -936,7 +1037,11 @@ pub fn handle_battery(_theme: &ColorfulTheme) -> Result<()> {
                     status = sub[1].trim().to_string();
                 }
                 if sub.len() > 2 {
-                    time_rem = sub[2].trim().replace("present: true", "").trim().to_string();
+                    time_rem = sub[2]
+                        .trim()
+                        .replace("present: true", "")
+                        .trim()
+                        .to_string();
                     if time_rem.is_empty() {
                         time_rem = "Calculated by system".to_string();
                     }
@@ -946,7 +1051,10 @@ pub fn handle_battery(_theme: &ColorfulTheme) -> Result<()> {
     }
 
     // Cycle count from system_profiler
-    let sp_out = Command::new("system_profiler").args(["SPPowerDataType"]).output().ok();
+    let sp_out = Command::new("system_profiler")
+        .args(["SPPowerDataType"])
+        .output()
+        .ok();
     let mut cycle_count = "-".to_string();
     let mut max_capacity = "-".to_string();
     let mut condition = "-".to_string();
@@ -1041,7 +1149,10 @@ pub fn handle_awake(theme: &ColorfulTheme, minutes: Option<u64>) -> Result<()> {
             .status();
         println!("{} Awake timer expired.", "✔".green().bold());
     } else {
-        println!("{} Keeping Mac awake indefinitely (Press Ctrl+C to stop)...", "☕".bold());
+        println!(
+            "{} Keeping Mac awake indefinitely (Press Ctrl+C to stop)...",
+            "☕".bold()
+        );
         let _ = Command::new("caffeinate").arg("-d").status();
         println!("{} Anti-sleep ended.", "✔".green().bold());
     }
@@ -1100,8 +1211,13 @@ pub fn handle_peek(theme: &ColorfulTheme, file: Option<PathBuf>) -> Result<()> {
         bail!("file '{}' does not exist", target.display());
     }
 
-    println!("{}", format!("Launching macOS QuickLook for '{}'...", target.display()).dimmed());
-    let _ = Command::new("qlmanage").args(["-p", &target.to_string_lossy()]).status();
+    println!(
+        "{}",
+        format!("Launching macOS QuickLook for '{}'...", target.display()).dimmed()
+    );
+    let _ = Command::new("qlmanage")
+        .args(["-p", &target.to_string_lossy()])
+        .status();
     Ok(())
 }
 
@@ -1162,10 +1278,7 @@ pub fn handle_trash(theme: &ColorfulTheme, action: Option<&str>) -> Result<()> {
                         "{} Access to ~/.Trash is restricted by macOS Privacy/TCC.",
                         "●".yellow()
                     );
-                    println!(
-                        "To empty trash directly, run: {}",
-                        "run trash empty".bold()
-                    );
+                    println!("To empty trash directly, run: {}", "run trash empty".bold());
                 }
             }
         }
@@ -1184,7 +1297,10 @@ pub fn handle_trash(theme: &ColorfulTheme, action: Option<&str>) -> Result<()> {
                             total_bytes += m.len();
                         }
                     }
-                    (count.to_string(), crate::commands::format_bytes(total_bytes))
+                    (
+                        count.to_string(),
+                        crate::commands::format_bytes(total_bytes),
+                    )
                 }
                 Err(_) => (
                     "Restricted by macOS".dimmed().to_string(),
@@ -1235,16 +1351,26 @@ pub fn handle_trash(theme: &ColorfulTheme, action: Option<&str>) -> Result<()> {
 pub fn handle_shot(theme: &ColorfulTheme, mode: Option<&str>) -> Result<()> {
     match mode {
         Some("window") => {
-            println!("{}", "Click any window to capture with native shadow to clipboard...".dimmed());
+            println!(
+                "{}",
+                "Click any window to capture with native shadow to clipboard...".dimmed()
+            );
             let _ = Command::new("screencapture").args(["-c", "-W"]).status();
-            println!("{} Window screenshot copied to clipboard!", "✔".green().bold());
+            println!(
+                "{} Window screenshot copied to clipboard!",
+                "✔".green().bold()
+            );
         }
         Some("full") => {
             let home = std::env::var("HOME").unwrap_or_default();
             let out_file = PathBuf::from(home).join("Desktop").join("screenshot.png");
             println!("{}", "Capturing full screen to Desktop...".dimmed());
             let _ = Command::new("screencapture").arg(&out_file).status();
-            println!("{} Screenshot saved to Desktop: {}", "✔".green().bold(), out_file.display());
+            println!(
+                "{} Screenshot saved to Desktop: {}",
+                "✔".green().bold(),
+                out_file.display()
+            );
         }
         Some("clip") | Some("selection") | None => {
             if std::io::stdin().is_terminal() && mode.is_none() {
@@ -1275,9 +1401,15 @@ pub fn handle_shot(theme: &ColorfulTheme, mode: Option<&str>) -> Result<()> {
                 return Ok(());
             }
 
-            println!("{}", "Select area on screen (copied directly to clipboard)...".dimmed());
+            println!(
+                "{}",
+                "Select area on screen (copied directly to clipboard)...".dimmed()
+            );
             let _ = Command::new("screencapture").args(["-c", "-i"]).status();
-            println!("{} Area screenshot copied to clipboard!", "✔".green().bold());
+            println!(
+                "{} Area screenshot copied to clipboard!",
+                "✔".green().bold()
+            );
         }
         Some(other) => {
             bail!("unknown shot mode '{other}'. Supported: selection, window, full");
@@ -1290,14 +1422,20 @@ pub fn handle_shot(theme: &ColorfulTheme, mode: Option<&str>) -> Result<()> {
 // 13. System Notifications (`run notify`)
 // ============================================================================
 
-pub fn handle_notify(theme: &ColorfulTheme, title: Option<&str>, message: Option<&str>) -> Result<()> {
+pub fn handle_notify(
+    theme: &ColorfulTheme,
+    title: Option<&str>,
+    message: Option<&str>,
+) -> Result<()> {
     let t = match title {
         Some(val) => val.to_string(),
         None => {
             if !std::io::stdin().is_terminal() {
                 "Notification from run-cli".to_string()
             } else {
-                Input::with_theme(theme).with_prompt("Notification Title").interact_text()?
+                Input::with_theme(theme)
+                    .with_prompt("Notification Title")
+                    .interact_text()?
             }
         }
     };
@@ -1308,16 +1446,20 @@ pub fn handle_notify(theme: &ColorfulTheme, title: Option<&str>, message: Option
             if !std::io::stdin().is_terminal() {
                 "Process finished successfully.".to_string()
             } else {
-                Input::with_theme(theme).with_prompt("Notification Message").interact_text()?
+                Input::with_theme(theme)
+                    .with_prompt("Notification Message")
+                    .interact_text()?
             }
         }
     };
 
-    let script = format!(
-        r#"display notification "{m}" with title "{t}" sound name "Glass""#
-    );
+    let script = format!(r#"display notification "{m}" with title "{t}" sound name "Glass""#);
     run_osascript(&script)?;
-    println!("{} Dispatched native notification: \"{t}\"", "✔".green().bold(), t = t);
+    println!(
+        "{} Dispatched native notification: \"{t}\"",
+        "✔".green().bold(),
+        t = t
+    );
     Ok(())
 }
 
@@ -1341,8 +1483,10 @@ pub fn handle_dark(_theme: &ColorfulTheme, mode: Option<&str>) -> Result<()> {
             // Toggle
             let script = "tell app \"System Events\" to tell appearance preferences to set dark mode to not dark mode";
             run_osascript(script)?;
-            let cur = run_osascript("tell app \"System Events\" to tell appearance preferences to get dark mode")
-                .unwrap_or_else(|_| "true".to_string());
+            let cur = run_osascript(
+                "tell app \"System Events\" to tell appearance preferences to get dark mode",
+            )
+            .unwrap_or_else(|_| "true".to_string());
             if cur == "true" {
                 println!("{} Switched to Dark Mode 🌙", "✔".green().bold());
             } else {
@@ -1361,9 +1505,11 @@ pub fn handle_lock() -> Result<()> {
     println!("{}", "Locking macOS screen...".dimmed());
     let status = Command::new("pmset").arg("displaysleepnow").status();
     if status.is_err() {
-        let _ = Command::new("/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession")
-            .arg("-suspend")
-            .status();
+        let _ = Command::new(
+            "/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession",
+        )
+        .arg("-suspend")
+        .status();
     }
     println!("{} Screen locked.", "✔".green().bold());
     Ok(())
@@ -1377,10 +1523,19 @@ pub fn handle_desktop(theme: &ColorfulTheme, action: Option<&str>) -> Result<()>
     match action {
         Some("hide") | Some("clean") => {
             let _ = Command::new("defaults")
-                .args(["write", "com.apple.finder", "CreateDesktop", "-bool", "false"])
+                .args([
+                    "write",
+                    "com.apple.finder",
+                    "CreateDesktop",
+                    "-bool",
+                    "false",
+                ])
                 .status();
             let _ = Command::new("killall").arg("Finder").status();
-            println!("{} Desktop icons hidden for clean presentation mode!", "✔".green().bold());
+            println!(
+                "{} Desktop icons hidden for clean presentation mode!",
+                "✔".green().bold()
+            );
         }
         Some("show") | Some("restore") => {
             let _ = Command::new("defaults")
@@ -1454,12 +1609,20 @@ pub fn handle_dns(_theme: &ColorfulTheme) -> Result<()> {
     println!("{}", "Flushing macOS DNS cache...".dimmed());
 
     let st1 = Command::new("dscacheutil").arg("-flushcache").status();
-    let st2 = Command::new("killall").args(["-HUP", "mDNSResponder"]).status();
+    let st2 = Command::new("killall")
+        .args(["-HUP", "mDNSResponder"])
+        .status();
 
     if (st1.is_ok() && st1.unwrap().success()) || (st2.is_ok() && st2.unwrap().success()) {
-        println!("{} macOS DNS cache flushed successfully! 🌐", "✔".green().bold());
+        println!(
+            "{} macOS DNS cache flushed successfully! 🌐",
+            "✔".green().bold()
+        );
     } else {
-        println!("{} Standard flush attempted. If issues persist, run: sudo dscacheutil -flushcache", "●".yellow());
+        println!(
+            "{} Standard flush attempted. If issues persist, run: sudo dscacheutil -flushcache",
+            "●".yellow()
+        );
     }
     Ok(())
 }

@@ -558,7 +558,13 @@ enum Commands {
     },
 
     /// Smart multi-stack dependency installer and package adder (Node, Python, Rust, Flutter, Go)
-    #[command(name = "install", alias = "ins", alias = "deps", alias = "setup", alias = "i")]
+    #[command(
+        name = "install",
+        alias = "ins",
+        alias = "deps",
+        alias = "setup",
+        alias = "i"
+    )]
     Install {
         /// Optional package name to add
         package: Option<String>,
@@ -568,7 +574,13 @@ enum Commands {
     },
 
     /// Search the web or open URLs directly in your default browser
-    #[command(name = "browse", alias = "brw", alias = "web", alias = "surf", alias = "google")]
+    #[command(
+        name = "browse",
+        alias = "brw",
+        alias = "web",
+        alias = "surf",
+        alias = "google"
+    )]
     Browse {
         /// Search query or URL to open (can be multiple words)
         #[arg(num_args = 0..)]
@@ -1439,8 +1451,9 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .filter(|c| {
                 [
                     "project", "dev", "build", "test", "clean", "sync", "network", "share",
-                    "bench", "docker", "secret", "config", "alias", "stats", "update", "uuid", "pass", "timer", "install", "browse",
-                    "ocr", "img", "color", "encrypt", "decrypt", "lan", "mock",
+                    "bench", "docker", "secret", "config", "alias", "stats", "update", "uuid",
+                    "pass", "timer", "install", "browse", "ocr", "img", "color", "encrypt",
+                    "decrypt", "lan", "mock",
                 ]
                 .contains(&c.name)
             })
@@ -1450,9 +1463,26 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .copied()
             .filter(|c| {
                 [
-                    "wifi", "bluetooth", "airpods", "airdrop", "music", "volume", "note",
-                    "fixapp", "battery", "awake", "peek", "trash", "shot", "notify", "dark",
-                    "light", "lock", "desktop", "voice", "dns",
+                    "wifi",
+                    "bluetooth",
+                    "airpods",
+                    "airdrop",
+                    "music",
+                    "volume",
+                    "note",
+                    "fixapp",
+                    "battery",
+                    "awake",
+                    "peek",
+                    "trash",
+                    "shot",
+                    "notify",
+                    "dark",
+                    "light",
+                    "lock",
+                    "desktop",
+                    "voice",
+                    "dns",
                 ]
                 .contains(&c.name)
             })
@@ -1484,9 +1514,31 @@ fn handle_all_commands_menu(theme: &ColorfulTheme) -> Result<()> {
             .copied()
             .filter(|c| {
                 [
-                    "wifi", "bluetooth", "airpods", "airdrop", "port", "fetch", "ping", "pack",
-                    "unpack", "speedtest", "notify", "shot", "completion", "qr", "dns", "uuid", "pass", "browse",
-                    "ocr", "img", "color", "encrypt", "decrypt", "lan", "mock",
+                    "wifi",
+                    "bluetooth",
+                    "airpods",
+                    "airdrop",
+                    "port",
+                    "fetch",
+                    "ping",
+                    "pack",
+                    "unpack",
+                    "speedtest",
+                    "notify",
+                    "shot",
+                    "completion",
+                    "qr",
+                    "dns",
+                    "uuid",
+                    "pass",
+                    "browse",
+                    "ocr",
+                    "img",
+                    "color",
+                    "encrypt",
+                    "decrypt",
+                    "lan",
+                    "mock",
                 ]
                 .contains(&c.name)
             })
@@ -1609,11 +1661,9 @@ fn dispatch_command(theme: &ColorfulTheme, command: Commands) -> Result<()> {
         } => commands::handle_alias(theme, action.as_deref(), name.as_deref(), target.as_deref()),
         Commands::Stats => commands::handle_stats(theme),
         Commands::Init => handle_init(),
-        Commands::Wifi {
-            action,
-            arg1,
-            arg2,
-        } => mac::handle_wifi(theme, action.as_deref(), arg1.as_deref(), arg2.as_deref()),
+        Commands::Wifi { action, arg1, arg2 } => {
+            mac::handle_wifi(theme, action.as_deref(), arg1.as_deref(), arg2.as_deref())
+        }
         Commands::Bluetooth { action } => mac::handle_bluetooth(theme, action.as_deref()),
         Commands::Airpods => mac::handle_airpods(theme),
         Commands::Airdrop { file } => mac::handle_airdrop(theme, file),
@@ -3934,7 +3984,9 @@ fn print_command_detail(cmd: &str) {
             );
             println!("Smart multi-stack dependency installer and package adder.\n");
             println!("{}", electric_blue("USAGE:").bold());
-            println!("  run install               Auto-detect stack & lockfile and install dependencies");
+            println!(
+                "  run install               Auto-detect stack & lockfile and install dependencies"
+            );
             println!("  run ins                   3-letter alias");
             println!("  run ins <package>         Add dependency to detected project stack");
             println!("  run ins <package> -D      Add as development dependency");
@@ -3957,27 +4009,36 @@ fn print_command_detail(cmd: &str) {
             println!("  run web                   Search clipboard text or enter prompt");
         }
         "qr" | "qrc" => {
+            println!("{} qr (alias: qrc)", electric_blue("COMMAND:").bold());
             println!(
-                "{} qr (alias: qrc)",
-                electric_blue("COMMAND:").bold()
+                "Enhanced QR code suite: terminal generator, PNG export, Wi-Fi sharing, screen scan, and local drop.\n"
             );
-            println!("Enhanced QR code suite: terminal generator, PNG export, Wi-Fi sharing, screen scan, and local drop.\n");
             println!("{}", electric_blue("USAGE:").bold());
             println!("  run qr <text|url>         Generate terminal visual Unicode QR code");
             println!("  run qr <text> -o out.png  Export high-res QR code as PNG image");
             println!("  run qr <text> -c          Copy QR code image to macOS clipboard");
-            println!("  run qr wifi               Auto-detect active Wi-Fi & generate scannable join QR");
-            println!("  run qr scan               Snip screen selection or image file and decode QR code");
-            println!("  run qr share <file>       Ephemeral local Wi-Fi download server with QR code");
+            println!(
+                "  run qr wifi               Auto-detect active Wi-Fi & generate scannable join QR"
+            );
+            println!(
+                "  run qr scan               Snip screen selection or image file and decode QR code"
+            );
+            println!(
+                "  run qr share <file>       Ephemeral local Wi-Fi download server with QR code"
+            );
         }
         "ocr" | "txt" | "vision" | "scan-text" => {
             println!(
                 "{} ocr (aliases: txt, vision, scan-text)",
                 electric_blue("COMMAND:").bold()
             );
-            println!("Extract text from screen selection or image file using Apple Vision Neural OCR.\n");
+            println!(
+                "Extract text from screen selection or image file using Apple Vision Neural OCR.\n"
+            );
             println!("{}", electric_blue("USAGE:").bold());
-            println!("  run ocr                   Drag and select screen area with crosshair to extract text");
+            println!(
+                "  run ocr                   Drag and select screen area with crosshair to extract text"
+            );
             println!("  run ocr <image_path>      Extract text from image file (.png, .jpg, etc.)");
         }
         "img" | "view" | "pic" | "photo" => {
@@ -3985,9 +4046,13 @@ fn print_command_detail(cmd: &str) {
                 "{} img (aliases: view, pic, photo)",
                 electric_blue("COMMAND:").bold()
             );
-            println!("Render images directly inside the terminal using TrueColor ANSI half-blocks.\n");
+            println!(
+                "Render images directly inside the terminal using TrueColor ANSI half-blocks.\n"
+            );
             println!("{}", electric_blue("USAGE:").bold());
-            println!("  run img <image_path>      Render image in terminal with true 24-bit colors");
+            println!(
+                "  run img <image_path>      Render image in terminal with true 24-bit colors"
+            );
             println!("  run img <path> -w 60      Render image with custom maximum columns width");
         }
         "color" | "hex" | "rgb" | "picker" => {
@@ -3995,11 +4060,17 @@ fn print_command_detail(cmd: &str) {
                 "{} color (aliases: hex, rgb, picker)",
                 electric_blue("COMMAND:").bold()
             );
-            println!("Color inspector, converter (HEX, RGB, HSL, Flutter), and macOS eyedropper loupe.\n");
+            println!(
+                "Color inspector, converter (HEX, RGB, HSL, Flutter), and macOS eyedropper loupe.\n"
+            );
             println!("{}", electric_blue("USAGE:").bold());
-            println!("  run color #3B82F6         Inspect color, show truecolor swatch, and convert formats");
+            println!(
+                "  run color #3B82F6         Inspect color, show truecolor swatch, and convert formats"
+            );
             println!("  run color rgb(59,130,246) Inspect RGB or HSL color");
-            println!("  run color --pick          Launch macOS magnifying glass loupe to pick any pixel");
+            println!(
+                "  run color --pick          Launch macOS magnifying glass loupe to pick any pixel"
+            );
             println!("  run hex                   Interactive color inspector");
         }
         "encrypt" | "enc" | "crypt" => {
@@ -4019,7 +4090,9 @@ fn print_command_detail(cmd: &str) {
             );
             println!("Decrypt a file previously encrypted with run encrypt.\n");
             println!("{}", electric_blue("USAGE:").bold());
-            println!("  run decrypt .env.enc      Prompt for password and decrypt to original file");
+            println!(
+                "  run decrypt .env.enc      Prompt for password and decrypt to original file"
+            );
         }
         "lan" | "radar" | "subnet" => {
             println!(
@@ -4028,7 +4101,9 @@ fn print_command_detail(cmd: &str) {
             );
             println!("Scan local Wi-Fi / LAN network devices, IP addresses, and MACs via ARP.\n");
             println!("{}", electric_blue("USAGE:").bold());
-            println!("  run lan                   Display table of all active devices on your Wi-Fi");
+            println!(
+                "  run lan                   Display table of all active devices on your Wi-Fi"
+            );
             println!("  run radar                 Alias");
         }
         "mock" | "fake" | "dummy" => {
@@ -4720,7 +4795,11 @@ mod tests {
         assert!(matches!(
             Cli::try_parse_from(["run", "wif"]),
             Ok(Cli {
-                command: Some(Commands::Wifi { action: None, arg1: None, arg2: None })
+                command: Some(Commands::Wifi {
+                    action: None,
+                    arg1: None,
+                    arg2: None
+                })
             })
         ));
 
@@ -4896,7 +4975,10 @@ mod tests {
         assert!(matches!(
             Cli::try_parse_from(["run", "install"]),
             Ok(Cli {
-                command: Some(Commands::Install { package: None, dev: false })
+                command: Some(Commands::Install {
+                    package: None,
+                    dev: false
+                })
             })
         ));
 
@@ -4910,14 +4992,20 @@ mod tests {
         assert!(matches!(
             Cli::try_parse_from(["run", "deps"]),
             Ok(Cli {
-                command: Some(Commands::Install { package: None, dev: false })
+                command: Some(Commands::Install {
+                    package: None,
+                    dev: false
+                })
             })
         ));
 
         assert!(matches!(
             Cli::try_parse_from(["run", "setup"]),
             Ok(Cli {
-                command: Some(Commands::Install { package: None, dev: false })
+                command: Some(Commands::Install {
+                    package: None,
+                    dev: false
+                })
             })
         ));
 
@@ -5142,10 +5230,8 @@ mod tests {
             .map(|s| s.get_name().to_string())
             .collect();
 
-        let all_meta_commands: std::collections::HashSet<String> = ALL_COMMANDS
-            .iter()
-            .map(|c| c.name.to_string())
-            .collect();
+        let all_meta_commands: std::collections::HashSet<String> =
+            ALL_COMMANDS.iter().map(|c| c.name.to_string()).collect();
 
         // 1. Check if any Clap command is missing from metadata registry
         for cmd_name in &clap_subcommands {
@@ -5182,7 +5268,10 @@ mod tests {
             match res {
                 Err(e) if e.kind() == clap::error::ErrorKind::DisplayHelp => (),
                 Err(e) => panic!("Command '{} --help' returned error: {}", name, e),
-                Ok(_) => panic!("Command '{} --help' succeeded without displaying help", name),
+                Ok(_) => panic!(
+                    "Command '{} --help' succeeded without displaying help",
+                    name
+                ),
             }
 
             // Description check
@@ -5198,8 +5287,14 @@ mod tests {
                 let alias_res = Cli::try_parse_from(["run", alias, "--help"]);
                 match alias_res {
                     Err(e) if e.kind() == clap::error::ErrorKind::DisplayHelp => (),
-                    Err(e) => panic!("Alias '{}' of command '{}' failed to parse --help: {}", alias, name, e),
-                    Ok(_) => panic!("Alias '{}' of command '{}' --help succeeded without displaying help", alias, name),
+                    Err(e) => panic!(
+                        "Alias '{}' of command '{}' failed to parse --help: {}",
+                        alias, name, e
+                    ),
+                    Ok(_) => panic!(
+                        "Alias '{}' of command '{}' --help succeeded without displaying help",
+                        alias, name
+                    ),
                 }
             }
         }
@@ -5220,7 +5315,9 @@ mod tests {
             }
 
             // Test alias_3 resolves to cmd.name
-            let resolved = resolve_command_args_internal(&theme, &["run".into(), cmd.alias_3.into()], false).unwrap();
+            let resolved =
+                resolve_command_args_internal(&theme, &["run".into(), cmd.alias_3.into()], false)
+                    .unwrap();
             assert_eq!(
                 resolved,
                 Some(vec!["run".to_string(), cmd.name.to_string()]),
@@ -5231,7 +5328,9 @@ mod tests {
 
             // Test every alias in cmd.aliases resolves to cmd.name
             for &alias in cmd.aliases {
-                let resolved = resolve_command_args_internal(&theme, &["run".into(), (*alias).into()], false).unwrap();
+                let resolved =
+                    resolve_command_args_internal(&theme, &["run".into(), (*alias).into()], false)
+                        .unwrap();
                 assert_eq!(
                     resolved,
                     Some(vec!["run".to_string(), cmd.name.to_string()]),
@@ -5249,7 +5348,9 @@ mod tests {
 
         for cmd in ALL_COMMANDS {
             // Exact name resolves to itself
-            let resolved = resolve_command_args_internal(&theme, &["run".into(), cmd.name.into()], false).unwrap();
+            let resolved =
+                resolve_command_args_internal(&theme, &["run".into(), cmd.name.into()], false)
+                    .unwrap();
             assert_eq!(
                 resolved,
                 Some(vec!["run".to_string(), cmd.name.to_string()]),
@@ -5260,9 +5361,18 @@ mod tests {
             // Prefix match: if unique prefix of length >= 5
             if cmd.name.len() >= 5 {
                 let prefix = &cmd.name[..cmd.name.len() - 1];
-                let is_ambiguous = ALL_COMMANDS.iter().filter(|c| c.name.starts_with(prefix)).count() > 1;
+                let is_ambiguous = ALL_COMMANDS
+                    .iter()
+                    .filter(|c| c.name.starts_with(prefix))
+                    .count()
+                    > 1;
                 if !is_ambiguous {
-                    let resolved = resolve_command_args_internal(&theme, &["run".into(), prefix.into()], false).unwrap();
+                    let resolved = resolve_command_args_internal(
+                        &theme,
+                        &["run".into(), prefix.into()],
+                        false,
+                    )
+                    .unwrap();
                     assert_eq!(
                         resolved,
                         Some(vec!["run".to_string(), cmd.name.to_string()]),

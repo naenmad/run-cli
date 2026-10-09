@@ -166,7 +166,10 @@ pub fn record_command_stat(cmd_name: &str) {
     }
     stats.last_used = Some(now);
 
-    let count = stats.command_counts.entry(cmd_name.to_string()).or_insert(0);
+    let count = stats
+        .command_counts
+        .entry(cmd_name.to_string())
+        .or_insert(0);
     *count = count.saturating_add(1);
 
     if let Ok(dir) = config_dir() {

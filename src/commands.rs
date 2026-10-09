@@ -360,8 +360,6 @@ pub fn handle_kill(theme: &ColorfulTheme, target: Option<&str>, force: bool) -> 
     Ok(())
 }
 
-
-
 /// fetch (alias: fch, get, curl, wget) - Fetch HTTP response or download file locally
 pub fn handle_fetch(
     theme: &ColorfulTheme,
@@ -2520,7 +2518,11 @@ pub fn handle_config(
                 "search_engine" | "engine" => {
                     cfg.search_engine = Some(val_str.to_lowercase());
                     config::save_config(&cfg)?;
-                    println!("{} Set search_engine to '{}'", "✔".green().bold(), val_str.to_lowercase());
+                    println!(
+                        "{} Set search_engine to '{}'",
+                        "✔".green().bold(),
+                        val_str.to_lowercase()
+                    );
                 }
                 "custom_hubs" | "hubs" => {
                     let mut hubs = cfg.custom_hubs.unwrap_or_default();
@@ -2944,7 +2946,9 @@ fn scan_listening_ports() -> Vec<PortProcess> {
 
 fn kill_process_pid(pid: u32) -> Result<()> {
     // Try graceful SIGTERM first
-    let _ = Command::new("kill").args(["-15", &pid.to_string()]).status();
+    let _ = Command::new("kill")
+        .args(["-15", &pid.to_string()])
+        .status();
     std::thread::sleep(std::time::Duration::from_millis(200));
 
     // Check if still running
@@ -3046,7 +3050,10 @@ pub fn handle_port(theme: &ColorfulTheme, port: Option<&str>, kill: bool) -> Res
     }
 
     if !std::io::stdin().is_terminal() {
-        println!("{:<8} {:<8} {:<18} {:<12} ADDRESS", "PORT", "PID", "PROCESS", "USER");
+        println!(
+            "{:<8} {:<8} {:<18} {:<12} ADDRESS",
+            "PORT", "PID", "PROCESS", "USER"
+        );
         println!("{}", "─".repeat(60));
         for p in &ports {
             println!(
@@ -3098,7 +3105,10 @@ pub fn handle_port(theme: &ColorfulTheme, port: Option<&str>, kill: bool) -> Res
 
     let actions = ["Kill / Terminate Process", "Cancel"];
     let act_sel = Select::with_theme(theme)
-        .with_prompt(format!("Action for PID {} ({})", selected.pid, selected.command))
+        .with_prompt(format!(
+            "Action for PID {} ({})",
+            selected.pid, selected.command
+        ))
         .items(&actions)
         .default(0)
         .interact()?;
@@ -3130,7 +3140,9 @@ pub fn handle_alias(
         Some("list") | Some("ls") => {
             let aliases = config::get_aliases();
             if aliases.is_empty() {
-                println!("No custom aliases registered yet. Add one with: run alias add <name> \"<command>\"");
+                println!(
+                    "No custom aliases registered yet. Add one with: run alias add <name> \"<command>\""
+                );
                 return Ok(());
             }
             ui::print_banner();
@@ -3142,8 +3154,10 @@ pub fn handle_alias(
             ui::print_card("Configured Developer Aliases", &rows);
         }
         Some("add") | Some("set") => {
-            let a_name = name.context("missing alias name (e.g. 'run alias add c \"cargo check\"')")?;
-            let a_target = target.context("missing target command (e.g. 'run alias add c \"cargo check\"')")?;
+            let a_name =
+                name.context("missing alias name (e.g. 'run alias add c \"cargo check\"')")?;
+            let a_target = target
+                .context("missing target command (e.g. 'run alias add c \"cargo check\"')")?;
             config::set_alias(a_name, a_target)?;
             println!(
                 "{} Registered alias: {} ➔ '{}'",
@@ -3365,7 +3379,11 @@ pub fn handle_timer(theme: &ColorfulTheme, minutes: Option<u64>) -> Result<()> {
     };
 
     println!();
-    println!("{} Timer started for {} minutes. Press Ctrl+C to stop.", "⏱️".bold(), total_secs / 60);
+    println!(
+        "{} Timer started for {} minutes. Press Ctrl+C to stop.",
+        "⏱️".bold(),
+        total_secs / 60
+    );
     println!();
 
     let start = std::time::Instant::now();
@@ -3382,9 +3400,18 @@ pub fn handle_timer(theme: &ColorfulTheme, minutes: Option<u64>) -> Result<()> {
         let bar_width: usize = 25;
         let filled = (pct * bar_width as f64).round() as usize;
         let empty = bar_width.saturating_sub(filled);
-        let bar = format!("{}{}", "■".repeat(filled).green(), "□".repeat(empty).dimmed());
+        let bar = format!(
+            "{}{}",
+            "■".repeat(filled).green(),
+            "□".repeat(empty).dimmed()
+        );
 
-        print!("\r  ⏳ [{bar}] {:02}:{:02} remaining ({:.0}%)   ", rem_min, rem_sec, pct * 100.0);
+        print!(
+            "\r  ⏳ [{bar}] {:02}:{:02} remaining ({:.0}%)   ",
+            rem_min,
+            rem_sec,
+            pct * 100.0
+        );
         let _ = std::io::stdout().flush();
 
         std::thread::sleep(std::time::Duration::from_millis(500));
@@ -3394,7 +3421,11 @@ pub fn handle_timer(theme: &ColorfulTheme, minutes: Option<u64>) -> Result<()> {
     println!("{} Time is up! Great work! 🎉", "✔".green().bold());
 
     // Native macOS chime + banner notification
-    let _ = crate::mac::handle_notify(theme, Some("Timer Finished! ⏰"), Some("Your focus session has completed."));
+    let _ = crate::mac::handle_notify(
+        theme,
+        Some("Timer Finished! ⏰"),
+        Some("Your focus session has completed."),
+    );
     Ok(())
 }
 
@@ -3418,7 +3449,10 @@ pub fn handle_uuid() -> Result<()> {
         &[
             ("UUID (Lowercase)", uuid_lower.green().bold().to_string()),
             ("UUID (Uppercase)", raw),
-            ("Clipboard", "Copied to clipboard automatically 📋".cyan().to_string()),
+            (
+                "Clipboard",
+                "Copied to clipboard automatically 📋".cyan().to_string(),
+            ),
         ],
     );
     Ok(())
@@ -3489,7 +3523,10 @@ pub fn handle_pass(theme: &ColorfulTheme, length: Option<usize>) -> Result<()> {
             ("Password", pass.green().bold().to_string()),
             ("Length", len.to_string()),
             ("Entropy / Strength", "Very Strong 🔒".green().to_string()),
-            ("Clipboard", "Copied to clipboard automatically 📋".cyan().to_string()),
+            (
+                "Clipboard",
+                "Copied to clipboard automatically 📋".cyan().to_string(),
+            ),
         ],
     );
     Ok(())
@@ -3533,10 +3570,7 @@ pub fn render_qr_to_terminal(code: &qrcode::QrCode) -> String {
 
 pub fn save_qr_as_png(code: &qrcode::QrCode, path: &std::path::Path) -> Result<()> {
     use image::Luma;
-    let img = code
-        .render::<Luma<u8>>()
-        .min_dimensions(512, 512)
-        .build();
+    let img = code.render::<Luma<u8>>().min_dimensions(512, 512).build();
     img.save(path)
         .with_context(|| format!("failed to save QR code image to '{}'", path.display()))?;
     Ok(())
@@ -3564,7 +3598,10 @@ pub fn copy_qr_image_to_clipboard(code: &qrcode::QrCode) -> Result<()> {
 }
 
 pub fn detect_wifi_ssid() -> Option<String> {
-    if let Ok(output) = Command::new("ipconfig").args(["getsummary", "en0"]).output() {
+    if let Ok(output) = Command::new("ipconfig")
+        .args(["getsummary", "en0"])
+        .output()
+    {
         let text = String::from_utf8_lossy(&output.stdout);
         for line in text.lines() {
             let trimmed = line.trim();
@@ -3576,7 +3613,10 @@ pub fn detect_wifi_ssid() -> Option<String> {
             }
         }
     }
-    if let Ok(output) = Command::new("networksetup").args(["-getairportnetwork", "en0"]).output() {
+    if let Ok(output) = Command::new("networksetup")
+        .args(["-getairportnetwork", "en0"])
+        .output()
+    {
         let text = String::from_utf8_lossy(&output.stdout);
         if let Some(pos) = text.find(": ") {
             let ssid = text[pos + 2..].trim();
@@ -3647,8 +3687,8 @@ pub fn handle_qr_wifi(
         format!("WIFI:T:WPA;S:{};P:{};;", ssid, password)
     };
 
-    let code = qrcode::QrCode::new(qr_payload.as_bytes())
-        .context("failed to generate Wi-Fi QR code")?;
+    let code =
+        qrcode::QrCode::new(qr_payload.as_bytes()).context("failed to generate Wi-Fi QR code")?;
 
     let term_image = render_qr_to_terminal(&code);
     println!();
@@ -3808,8 +3848,8 @@ pub fn handle_qr_share(path: &std::path::Path) -> Result<()> {
     println!("  URL:  {}", download_url.green().bold());
     println!("  Scan QR code below with any phone or device on this Wi-Fi:\n");
 
-    let code = qrcode::QrCode::new(download_url.as_bytes())
-        .context("failed to create share QR code")?;
+    let code =
+        qrcode::QrCode::new(download_url.as_bytes()).context("failed to create share QR code")?;
     println!("{}", render_qr_to_terminal(&code));
     println!(
         "  Server is waiting for download... (Press {} to stop)",
@@ -3907,7 +3947,8 @@ pub fn handle_qr(
         }
     };
 
-    let code = qrcode::QrCode::new(text.as_bytes()).context("failed to encode text into QR code")?;
+    let code =
+        qrcode::QrCode::new(text.as_bytes()).context("failed to encode text into QR code")?;
     let image = render_qr_to_terminal(&code);
 
     println!();
@@ -3932,7 +3973,6 @@ pub fn handle_qr(
     Ok(())
 }
 
-
 // ============================================================================
 // System & Toolchain Updater (`run update`, `run upd`)
 // ============================================================================
@@ -3946,7 +3986,11 @@ pub fn handle_update(_theme: &ColorfulTheme) -> Result<()> {
     println!();
 
     // 1. Homebrew
-    let has_brew = Command::new("which").arg("brew").output().map(|o| o.status.success()).unwrap_or(false);
+    let has_brew = Command::new("which")
+        .arg("brew")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
     if has_brew {
         println!("{} Updating Homebrew formulas and casks...", "🍺".bold());
         let _ = Command::new("brew").arg("update").status();
@@ -3955,7 +3999,11 @@ pub fn handle_update(_theme: &ColorfulTheme) -> Result<()> {
     }
 
     // 2. Rustup
-    let has_rustup = Command::new("which").arg("rustup").output().map(|o| o.status.success()).unwrap_or(false);
+    let has_rustup = Command::new("which")
+        .arg("rustup")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
     if has_rustup {
         println!("{} Updating Rust toolchain...", "🦀".bold());
         let _ = Command::new("rustup").arg("update").status();
@@ -3964,8 +4012,16 @@ pub fn handle_update(_theme: &ColorfulTheme) -> Result<()> {
     }
 
     // 3. Node package managers (npm / pnpm)
-    let has_pnpm = Command::new("which").arg("pnpm").output().map(|o| o.status.success()).unwrap_or(false);
-    let has_npm = Command::new("which").arg("npm").output().map(|o| o.status.success()).unwrap_or(false);
+    let has_pnpm = Command::new("which")
+        .arg("pnpm")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let has_npm = Command::new("which")
+        .arg("npm")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
 
     if has_pnpm {
         println!("{} Updating global pnpm packages...", "📦".bold());
@@ -3979,7 +4035,10 @@ pub fn handle_update(_theme: &ColorfulTheme) -> Result<()> {
         println!();
     }
 
-    println!("{} All detected developer toolchains are up to date! 🚀", "✔".green().bold());
+    println!(
+        "{} All detected developer toolchains are up to date! 🚀",
+        "✔".green().bold()
+    );
     Ok(())
 }
 
@@ -3989,10 +4048,19 @@ pub fn handle_update(_theme: &ColorfulTheme) -> Result<()> {
 
 #[derive(Debug, Clone)]
 enum ProjectStack {
-    Node { runner: String, lockfile: Option<String> },
-    Python { runner: String, manifest: String, has_venv: bool },
+    Node {
+        runner: String,
+        lockfile: Option<String>,
+    },
+    Python {
+        runner: String,
+        manifest: String,
+        has_venv: bool,
+    },
     Rust,
-    Flutter { runner: String },
+    Flutter {
+        runner: String,
+    },
     Go,
     Php,
     Ruby,
@@ -4020,7 +4088,11 @@ impl ProjectStack {
                     format!("{runner} (package.json)")
                 }
             }
-            ProjectStack::Python { runner, manifest, has_venv } => {
+            ProjectStack::Python {
+                runner,
+                manifest,
+                has_venv,
+            } => {
                 let venv_status = if *has_venv { "in .venv" } else { "no venv" };
                 format!("{runner} ({manifest}, {venv_status})")
             }
@@ -4059,7 +4131,8 @@ fn detect_project_stacks(dir: &std::path::Path) -> Vec<ProjectStack> {
                 .map(|s| s.contains("[tool.poetry]"))
                 .unwrap_or(false));
     let py_has_pipenv = dir.join("Pipfile").exists();
-    let py_has_reqs = dir.join("requirements.txt").exists() || dir.join("requirements-dev.txt").exists();
+    let py_has_reqs =
+        dir.join("requirements.txt").exists() || dir.join("requirements-dev.txt").exists();
     let py_has_pyproject = dir.join("pyproject.toml").exists();
     let py_has_venv = dir.join(".venv").exists() || dir.join("venv").exists();
 
@@ -4076,8 +4149,16 @@ fn detect_project_stacks(dir: &std::path::Path) -> Vec<ProjectStack> {
             has_venv: py_has_venv,
         });
     } else if py_has_reqs || py_has_pyproject {
-        let manifest = if py_has_reqs { "requirements.txt" } else { "pyproject.toml" };
-        let has_uv = Command::new("which").arg("uv").output().map(|o| o.status.success()).unwrap_or(false);
+        let manifest = if py_has_reqs {
+            "requirements.txt"
+        } else {
+            "pyproject.toml"
+        };
+        let has_uv = Command::new("which")
+            .arg("uv")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
         let runner = if has_uv { "uv" } else { "pip" }.to_string();
         stacks.push(ProjectStack::Python {
             runner,
@@ -4093,7 +4174,11 @@ fn detect_project_stacks(dir: &std::path::Path) -> Vec<ProjectStack> {
 
     // 4. Flutter / Dart
     if dir.join("pubspec.yaml").exists() {
-        let has_flutter = Command::new("which").arg("flutter").output().map(|o| o.status.success()).unwrap_or(false);
+        let has_flutter = Command::new("which")
+            .arg("flutter")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
         let runner = if has_flutter { "flutter" } else { "dart" }.to_string();
         stacks.push(ProjectStack::Flutter { runner });
     }
@@ -4116,45 +4201,93 @@ fn detect_project_stacks(dir: &std::path::Path) -> Vec<ProjectStack> {
     stacks
 }
 
-fn execute_stack_install(theme: &ColorfulTheme, stack: &ProjectStack, dir: &std::path::Path) -> Result<()> {
+fn execute_stack_install(
+    theme: &ColorfulTheme,
+    stack: &ProjectStack,
+    dir: &std::path::Path,
+) -> Result<()> {
     match stack {
         ProjectStack::Node { runner, lockfile } => {
             let desc = lockfile.as_deref().unwrap_or("package.json");
-            println!("{} Installing Node.js dependencies using {} ({desc})...", "📦".bold(), runner.cyan().bold());
-            let status = Command::new(runner).arg("install").current_dir(dir).status()
+            println!(
+                "{} Installing Node.js dependencies using {} ({desc})...",
+                "📦".bold(),
+                runner.cyan().bold()
+            );
+            let status = Command::new(runner)
+                .arg("install")
+                .current_dir(dir)
+                .status()
                 .with_context(|| format!("failed to execute '{runner} install'"))?;
             if !status.success() {
                 bail!("'{runner} install' exited with non-zero code");
             }
-            println!("{} Node.js dependencies installed successfully!", "✔".green().bold());
+            println!(
+                "{} Node.js dependencies installed successfully!",
+                "✔".green().bold()
+            );
         }
-        ProjectStack::Python { runner, manifest, has_venv } => {
+        ProjectStack::Python {
+            runner,
+            manifest,
+            has_venv,
+        } => {
             let mut venv_created = *has_venv;
-            if !*has_venv && runner != "poetry" && runner != "pipenv" && std::io::stdin().is_terminal() {
+            if !*has_venv
+                && runner != "poetry"
+                && runner != "pipenv"
+                && std::io::stdin().is_terminal()
+            {
                 let confirm = Confirm::with_theme(theme)
                     .with_prompt("No Python virtual environment (.venv) found. Create one now?")
                     .default(true)
                     .interact()?;
                 if confirm {
                     println!("{} Creating virtual environment in .venv...", "🐍".bold());
-                    let _ = Command::new("python3").args(["-m", "venv", ".venv"]).current_dir(dir).status();
+                    let _ = Command::new("python3")
+                        .args(["-m", "venv", ".venv"])
+                        .current_dir(dir)
+                        .status();
                     println!("{} Created .venv.", "✔".green().bold());
                     venv_created = true;
                 }
             }
 
-            println!("{} Installing Python dependencies using {} ({manifest})...", "🐍".bold(), runner.cyan().bold());
+            println!(
+                "{} Installing Python dependencies using {} ({manifest})...",
+                "🐍".bold(),
+                runner.cyan().bold()
+            );
 
             let status = if runner == "poetry" {
-                Command::new("poetry").arg("install").current_dir(dir).status()?
+                Command::new("poetry")
+                    .arg("install")
+                    .current_dir(dir)
+                    .status()?
             } else if runner == "pipenv" {
-                Command::new("pipenv").arg("install").current_dir(dir).status()?
+                Command::new("pipenv")
+                    .arg("install")
+                    .current_dir(dir)
+                    .status()?
             } else if runner == "uv" {
                 if dir.join("requirements.txt").exists() {
                     if venv_created && dir.join(".venv/bin/python").exists() {
-                        Command::new("uv").args(["pip", "install", "-r", "requirements.txt", "--python", ".venv/bin/python"]).current_dir(dir).status()?
+                        Command::new("uv")
+                            .args([
+                                "pip",
+                                "install",
+                                "-r",
+                                "requirements.txt",
+                                "--python",
+                                ".venv/bin/python",
+                            ])
+                            .current_dir(dir)
+                            .status()?
                     } else {
-                        Command::new("uv").args(["pip", "install", "-r", "requirements.txt"]).current_dir(dir).status()?
+                        Command::new("uv")
+                            .args(["pip", "install", "-r", "requirements.txt"])
+                            .current_dir(dir)
+                            .status()?
                     }
                 } else {
                     Command::new("uv").arg("sync").current_dir(dir).status()?
@@ -4168,39 +4301,72 @@ fn execute_stack_install(theme: &ColorfulTheme, stack: &ProjectStack, dir: &std:
                     "pip3"
                 };
                 if dir.join("requirements.txt").exists() {
-                    Command::new(pip_bin).args(["install", "-r", "requirements.txt"]).current_dir(dir).status()?
+                    Command::new(pip_bin)
+                        .args(["install", "-r", "requirements.txt"])
+                        .current_dir(dir)
+                        .status()?
                 } else if dir.join("requirements-dev.txt").exists() {
-                    Command::new(pip_bin).args(["install", "-r", "requirements-dev.txt"]).current_dir(dir).status()?
+                    Command::new(pip_bin)
+                        .args(["install", "-r", "requirements-dev.txt"])
+                        .current_dir(dir)
+                        .status()?
                 } else {
-                    Command::new(pip_bin).args(["install", "-e", "."]).current_dir(dir).status()?
+                    Command::new(pip_bin)
+                        .args(["install", "-e", "."])
+                        .current_dir(dir)
+                        .status()?
                 }
             };
 
             if !status.success() {
                 bail!("Python dependency installation exited with error");
             }
-            println!("{} Python dependencies installed successfully!", "✔".green().bold());
+            println!(
+                "{} Python dependencies installed successfully!",
+                "✔".green().bold()
+            );
         }
         ProjectStack::Rust => {
-            println!("{} Fetching and checking Rust crate dependencies...", "🦀".bold());
-            let status = Command::new("cargo").arg("check").current_dir(dir).status()?;
+            println!(
+                "{} Fetching and checking Rust crate dependencies...",
+                "🦀".bold()
+            );
+            let status = Command::new("cargo")
+                .arg("check")
+                .current_dir(dir)
+                .status()?;
             if !status.success() {
                 bail!("'cargo check' exited with non-zero code");
             }
-            println!("{} Rust crate dependencies resolved and checked!", "✔".green().bold());
+            println!(
+                "{} Rust crate dependencies resolved and checked!",
+                "✔".green().bold()
+            );
         }
         ProjectStack::Flutter { runner } => {
             println!("{} Getting Flutter / Dart packages...", "📱".bold());
-            let status = Command::new(runner).args(["pub", "get"]).current_dir(dir).status()?;
+            let status = Command::new(runner)
+                .args(["pub", "get"])
+                .current_dir(dir)
+                .status()?;
             if !status.success() {
                 bail!("'{runner} pub get' exited with non-zero code");
             }
-            println!("{} Flutter / Dart packages downloaded successfully!", "✔".green().bold());
+            println!(
+                "{} Flutter / Dart packages downloaded successfully!",
+                "✔".green().bold()
+            );
         }
         ProjectStack::Go => {
             println!("{} Downloading and tidying Go modules...", "🐹".bold());
-            let _ = Command::new("go").args(["mod", "download"]).current_dir(dir).status();
-            let status = Command::new("go").args(["mod", "tidy"]).current_dir(dir).status()?;
+            let _ = Command::new("go")
+                .args(["mod", "download"])
+                .current_dir(dir)
+                .status();
+            let status = Command::new("go")
+                .args(["mod", "tidy"])
+                .current_dir(dir)
+                .status()?;
             if !status.success() {
                 bail!("'go mod tidy' exited with non-zero code");
             }
@@ -4208,7 +4374,10 @@ fn execute_stack_install(theme: &ColorfulTheme, stack: &ProjectStack, dir: &std:
         }
         ProjectStack::Php => {
             println!("{} Installing Composer dependencies...", "🐘".bold());
-            let status = Command::new("composer").arg("install").current_dir(dir).status()?;
+            let status = Command::new("composer")
+                .arg("install")
+                .current_dir(dir)
+                .status()?;
             if !status.success() {
                 bail!("'composer install' exited with non-zero code");
             }
@@ -4216,7 +4385,10 @@ fn execute_stack_install(theme: &ColorfulTheme, stack: &ProjectStack, dir: &std:
         }
         ProjectStack::Ruby => {
             println!("{} Installing Bundler gems...", "💎".bold());
-            let status = Command::new("bundle").arg("install").current_dir(dir).status()?;
+            let status = Command::new("bundle")
+                .arg("install")
+                .current_dir(dir)
+                .status()?;
             if !status.success() {
                 bail!("'bundle install' exited with non-zero code");
             }
@@ -4226,10 +4398,19 @@ fn execute_stack_install(theme: &ColorfulTheme, stack: &ProjectStack, dir: &std:
     Ok(())
 }
 
-fn execute_stack_add(stack: &ProjectStack, pkg: &str, is_dev: bool, dir: &std::path::Path) -> Result<()> {
+fn execute_stack_add(
+    stack: &ProjectStack,
+    pkg: &str,
+    is_dev: bool,
+    dir: &std::path::Path,
+) -> Result<()> {
     match stack {
         ProjectStack::Node { runner, .. } => {
-            println!("{} Adding '{pkg}' via {runner}...", "📦".bold(), runner = runner.cyan().bold());
+            println!(
+                "{} Adding '{pkg}' via {runner}...",
+                "📦".bold(),
+                runner = runner.cyan().bold()
+            );
             let mut args = vec!["add"];
             if is_dev {
                 if runner == "bun" {
@@ -4246,10 +4427,18 @@ fn execute_stack_add(stack: &ProjectStack, pkg: &str, is_dev: bool, dir: &std::p
             if !status.success() {
                 bail!("failed to add package '{pkg}' using {runner}");
             }
-            println!("{} Successfully added '{pkg}' to Node dependencies!", "✔".green().bold());
+            println!(
+                "{} Successfully added '{pkg}' to Node dependencies!",
+                "✔".green().bold()
+            );
         }
-        ProjectStack::Python { runner, has_venv, .. } => {
-            println!("{} Adding '{pkg}' via Python package manager...", "🐍".bold());
+        ProjectStack::Python {
+            runner, has_venv, ..
+        } => {
+            println!(
+                "{} Adding '{pkg}' via Python package manager...",
+                "🐍".bold()
+            );
             let status = if runner == "poetry" {
                 let mut args = vec!["add"];
                 if is_dev {
@@ -4257,14 +4446,20 @@ fn execute_stack_add(stack: &ProjectStack, pkg: &str, is_dev: bool, dir: &std::p
                     args.push("dev");
                 }
                 args.push(pkg);
-                Command::new("poetry").args(&args).current_dir(dir).status()?
+                Command::new("poetry")
+                    .args(&args)
+                    .current_dir(dir)
+                    .status()?
             } else if runner == "pipenv" {
                 let mut args = vec!["install"];
                 if is_dev {
                     args.push("--dev");
                 }
                 args.push(pkg);
-                Command::new("pipenv").args(&args).current_dir(dir).status()?
+                Command::new("pipenv")
+                    .args(&args)
+                    .current_dir(dir)
+                    .status()?
             } else if runner == "uv" {
                 let mut args = vec!["add"];
                 if is_dev {
@@ -4280,13 +4475,19 @@ fn execute_stack_add(stack: &ProjectStack, pkg: &str, is_dev: bool, dir: &std::p
                 } else {
                     "pip3"
                 };
-                Command::new(pip_bin).args(["install", pkg]).current_dir(dir).status()?
+                Command::new(pip_bin)
+                    .args(["install", pkg])
+                    .current_dir(dir)
+                    .status()?
             };
 
             if !status.success() {
                 bail!("failed to add Python package '{pkg}'");
             }
-            println!("{} Successfully added '{pkg}' to Python dependencies!", "✔".green().bold());
+            println!(
+                "{} Successfully added '{pkg}' to Python dependencies!",
+                "✔".green().bold()
+            );
         }
         ProjectStack::Rust => {
             println!("{} Adding '{pkg}' via cargo...", "🦀".bold());
@@ -4295,11 +4496,17 @@ fn execute_stack_add(stack: &ProjectStack, pkg: &str, is_dev: bool, dir: &std::p
                 args.push("--dev");
             }
             args.push(pkg);
-            let status = Command::new("cargo").args(&args).current_dir(dir).status()?;
+            let status = Command::new("cargo")
+                .args(&args)
+                .current_dir(dir)
+                .status()?;
             if !status.success() {
                 bail!("'cargo add {pkg}' failed");
             }
-            println!("{} Successfully added '{pkg}' to Cargo.toml!", "✔".green().bold());
+            println!(
+                "{} Successfully added '{pkg}' to Cargo.toml!",
+                "✔".green().bold()
+            );
         }
         ProjectStack::Flutter { runner } => {
             println!("{} Adding '{pkg}' via {runner}...", "📱".bold());
@@ -4312,16 +4519,28 @@ fn execute_stack_add(stack: &ProjectStack, pkg: &str, is_dev: bool, dir: &std::p
             if !status.success() {
                 bail!("'{runner} pub add {pkg}' failed");
             }
-            println!("{} Successfully added '{pkg}' to pubspec.yaml!", "✔".green().bold());
+            println!(
+                "{} Successfully added '{pkg}' to pubspec.yaml!",
+                "✔".green().bold()
+            );
         }
         ProjectStack::Go => {
             println!("{} Adding '{pkg}' via go get...", "🐹".bold());
-            let status = Command::new("go").args(["get", pkg]).current_dir(dir).status()?;
+            let status = Command::new("go")
+                .args(["get", pkg])
+                .current_dir(dir)
+                .status()?;
             if !status.success() {
                 bail!("'go get {pkg}' failed");
             }
-            let _ = Command::new("go").args(["mod", "tidy"]).current_dir(dir).status();
-            println!("{} Successfully added '{pkg}' to go.mod!", "✔".green().bold());
+            let _ = Command::new("go")
+                .args(["mod", "tidy"])
+                .current_dir(dir)
+                .status();
+            println!(
+                "{} Successfully added '{pkg}' to go.mod!",
+                "✔".green().bold()
+            );
         }
         ProjectStack::Php => {
             println!("{} Adding '{pkg}' via composer require...", "🐘".bold());
@@ -4330,11 +4549,17 @@ fn execute_stack_add(stack: &ProjectStack, pkg: &str, is_dev: bool, dir: &std::p
                 args.push("--dev");
             }
             args.push(pkg);
-            let status = Command::new("composer").args(&args).current_dir(dir).status()?;
+            let status = Command::new("composer")
+                .args(&args)
+                .current_dir(dir)
+                .status()?;
             if !status.success() {
                 bail!("'composer require {pkg}' failed");
             }
-            println!("{} Successfully added '{pkg}' to composer.json!", "✔".green().bold());
+            println!(
+                "{} Successfully added '{pkg}' to composer.json!",
+                "✔".green().bold()
+            );
         }
         ProjectStack::Ruby => {
             println!("{} Adding '{pkg}' via bundle add...", "💎".bold());
@@ -4344,27 +4569,32 @@ fn execute_stack_add(stack: &ProjectStack, pkg: &str, is_dev: bool, dir: &std::p
                 args.push("development");
             }
             args.push(pkg);
-            let status = Command::new("bundle").args(&args).current_dir(dir).status()?;
+            let status = Command::new("bundle")
+                .args(&args)
+                .current_dir(dir)
+                .status()?;
             if !status.success() {
                 bail!("'bundle add {pkg}' failed");
             }
-            println!("{} Successfully added '{pkg}' to Gemfile!", "✔".green().bold());
+            println!(
+                "{} Successfully added '{pkg}' to Gemfile!",
+                "✔".green().bold()
+            );
         }
     }
     Ok(())
 }
 
-pub fn handle_install(
-    theme: &ColorfulTheme,
-    package: Option<&str>,
-    is_dev: bool,
-) -> Result<()> {
+pub fn handle_install(theme: &ColorfulTheme, package: Option<&str>, is_dev: bool) -> Result<()> {
     ui::maybe_auto_clear();
-    let current_dir = std::env::current_dir().context("failed to read current working directory")?;
+    let current_dir =
+        std::env::current_dir().context("failed to read current working directory")?;
     let stacks = detect_project_stacks(&current_dir);
 
     if stacks.is_empty() {
-        bail!("no recognized project configuration found in current directory (e.g. package.json, requirements.txt, Cargo.toml, pubspec.yaml, go.mod)");
+        bail!(
+            "no recognized project configuration found in current directory (e.g. package.json, requirements.txt, Cargo.toml, pubspec.yaml, go.mod)"
+        );
     }
 
     if let Some(pkg) = package {
@@ -4372,7 +4602,10 @@ pub fn handle_install(
             &stacks[0]
         } else if std::io::stdin().is_terminal() {
             let cancel_btn = ui::cancel_option();
-            let mut options: Vec<String> = stacks.iter().map(|s| format!("{:<14} ➔  {}", s.name().bold(), s.detail().dimmed())).collect();
+            let mut options: Vec<String> = stacks
+                .iter()
+                .map(|s| format!("{:<14} ➔  {}", s.name().bold(), s.detail().dimmed()))
+                .collect();
             options.push(cancel_btn);
 
             let sel = Select::with_theme(theme)
@@ -4496,8 +4729,8 @@ pub fn is_likely_url(input: &str) -> Option<String> {
         return Some(format!("http://{trimmed}"));
     }
     let common_tlds = [
-        ".com", ".org", ".net", ".io", ".dev", ".app", ".co", ".id", ".ai",
-        ".me", ".xyz", ".cc", ".tv", ".sh", ".rs", ".so", ".to", ".info", ".edu", ".gov",
+        ".com", ".org", ".net", ".io", ".dev", ".app", ".co", ".id", ".ai", ".me", ".xyz", ".cc",
+        ".tv", ".sh", ".rs", ".so", ".to", ".info", ".edu", ".gov",
     ];
     let lower = trimmed.to_lowercase();
     for tld in common_tlds {
@@ -4624,9 +4857,7 @@ pub fn handle_browse(
             "!npm" | "npm" => (SearchTarget::Npm, query_args[1..].join(" ")),
             "!mdn" | "mdn" => (SearchTarget::Mdn, query_args[1..].join(" ")),
             "!ai" | "ai" | "perplexity" => (SearchTarget::Ai, query_args[1..].join(" ")),
-            "!ddg" | "ddg" | "duckduckgo" => {
-                (SearchTarget::DuckDuckGo, query_args[1..].join(" "))
-            }
+            "!ddg" | "ddg" | "duckduckgo" => (SearchTarget::DuckDuckGo, query_args[1..].join(" ")),
             "!g" | "google" => (SearchTarget::Google, query_args[1..].join(" ")),
             _ => (SearchTarget::Default, query_args.join(" ")),
         }
@@ -4879,7 +5110,10 @@ if !lines.isEmpty {
         println!("{}", "─".repeat(50).dimmed());
 
         let _ = crate::mac::copy_to_clipboard(&text);
-        println!("{} Copied extracted text to clipboard!", "📋".green().bold());
+        println!(
+            "{} Copied extracted text to clipboard!",
+            "📋".green().bold()
+        );
         Ok(())
     } else {
         bail!("no readable text found in image/selection");
@@ -4991,19 +5225,91 @@ fn rgb_to_hsl(r: u8, g: u8, b: u8) -> (f64, f64, f64) {
 pub fn parse_color_string(input: &str) -> Option<ParsedColor> {
     let s = input.trim().to_lowercase();
     match s.as_str() {
-        "red" => return Some(ParsedColor { r: 239, g: 68, b: 68 }),
-        "blue" => return Some(ParsedColor { r: 59, g: 130, b: 246 }),
-        "green" => return Some(ParsedColor { r: 34, g: 197, b: 94 }),
-        "yellow" => return Some(ParsedColor { r: 234, g: 179, b: 8 }),
-        "purple" => return Some(ParsedColor { r: 168, g: 85, b: 247 }),
-        "pink" => return Some(ParsedColor { r: 236, g: 72, b: 153 }),
-        "indigo" => return Some(ParsedColor { r: 99, g: 102, b: 241 }),
-        "orange" => return Some(ParsedColor { r: 249, g: 115, b: 22 }),
-        "teal" => return Some(ParsedColor { r: 20, g: 184, b: 166 }),
-        "cyan" => return Some(ParsedColor { r: 6, g: 182, b: 212 }),
-        "white" => return Some(ParsedColor { r: 255, g: 255, b: 255 }),
+        "red" => {
+            return Some(ParsedColor {
+                r: 239,
+                g: 68,
+                b: 68,
+            });
+        }
+        "blue" => {
+            return Some(ParsedColor {
+                r: 59,
+                g: 130,
+                b: 246,
+            });
+        }
+        "green" => {
+            return Some(ParsedColor {
+                r: 34,
+                g: 197,
+                b: 94,
+            });
+        }
+        "yellow" => {
+            return Some(ParsedColor {
+                r: 234,
+                g: 179,
+                b: 8,
+            });
+        }
+        "purple" => {
+            return Some(ParsedColor {
+                r: 168,
+                g: 85,
+                b: 247,
+            });
+        }
+        "pink" => {
+            return Some(ParsedColor {
+                r: 236,
+                g: 72,
+                b: 153,
+            });
+        }
+        "indigo" => {
+            return Some(ParsedColor {
+                r: 99,
+                g: 102,
+                b: 241,
+            });
+        }
+        "orange" => {
+            return Some(ParsedColor {
+                r: 249,
+                g: 115,
+                b: 22,
+            });
+        }
+        "teal" => {
+            return Some(ParsedColor {
+                r: 20,
+                g: 184,
+                b: 166,
+            });
+        }
+        "cyan" => {
+            return Some(ParsedColor {
+                r: 6,
+                g: 182,
+                b: 212,
+            });
+        }
+        "white" => {
+            return Some(ParsedColor {
+                r: 255,
+                g: 255,
+                b: 255,
+            });
+        }
         "black" => return Some(ParsedColor { r: 0, g: 0, b: 0 }),
-        "gray" | "grey" => return Some(ParsedColor { r: 107, g: 114, b: 128 }),
+        "gray" | "grey" => {
+            return Some(ParsedColor {
+                r: 107,
+                g: 114,
+                b: 128,
+            });
+        }
         _ => {}
     }
 
@@ -5094,11 +5400,7 @@ if #available(macOS 10.15, *) {
     }
 }
 
-pub fn handle_color(
-    theme: &ColorfulTheme,
-    input: Option<&str>,
-    pick: bool,
-) -> Result<()> {
+pub fn handle_color(theme: &ColorfulTheme, input: Option<&str>, pick: bool) -> Result<()> {
     let raw_color = if pick {
         pick_color_macos_loupe()?
     } else {
@@ -5138,7 +5440,9 @@ pub fn handle_color(
                         }
                     }
                 } else {
-                    bail!("provide color to inspect: run color <#hex|rgb|name> or run color --pick");
+                    bail!(
+                        "provide color to inspect: run color <#hex|rgb|name> or run color --pick"
+                    );
                 }
             }
         }
@@ -5221,8 +5525,8 @@ pub fn handle_encrypt(
     password_arg: Option<&str>,
 ) -> Result<()> {
     use aes_gcm::{
-        aead::{Aead, KeyInit},
         Aes256Gcm, Nonce,
+        aead::{Aead, KeyInit},
     };
     use std::io::Read;
 
@@ -5248,7 +5552,9 @@ pub fn handle_encrypt(
                     .with_confirmation("Confirm password", "Passwords do not match!")
                     .interact()?
             } else {
-                bail!("password required for encryption. Usage: run encrypt <file> --password <pass>");
+                bail!(
+                    "password required for encryption. Usage: run encrypt <file> --password <pass>"
+                );
             }
         }
     };
@@ -5259,8 +5565,7 @@ pub fn handle_encrypt(
 
     let mut salt = [0u8; 16];
     let mut nonce_bytes = [0u8; 12];
-    let mut urandom =
-        std::fs::File::open("/dev/urandom").context("failed to open /dev/urandom")?;
+    let mut urandom = std::fs::File::open("/dev/urandom").context("failed to open /dev/urandom")?;
     urandom.read_exact(&mut salt)?;
     urandom.read_exact(&mut nonce_bytes)?;
 
@@ -5295,7 +5600,10 @@ pub fn handle_encrypt(
         "  Encrypted: {}",
         out_path.display().to_string().cyan().bold()
     );
-    println!("  Size     : {}", format_bytes(ciphertext.len() as u64 + 36));
+    println!(
+        "  Size     : {}",
+        format_bytes(ciphertext.len() as u64 + 36)
+    );
     println!(
         "  💡 To decrypt, run: {}",
         format!("run decrypt {}", out_path.display()).yellow()
@@ -5311,8 +5619,8 @@ pub fn handle_decrypt(
     password_arg: Option<&str>,
 ) -> Result<()> {
     use aes_gcm::{
-        aead::{Aead, KeyInit},
         Aes256Gcm, Nonce,
+        aead::{Aead, KeyInit},
     };
     use std::io::Read;
 
@@ -5344,7 +5652,9 @@ pub fn handle_decrypt(
                     .with_prompt("Enter decryption password")
                     .interact()?
             } else {
-                bail!("password required for decryption. Usage: run decrypt <file> --password <pass>");
+                bail!(
+                    "password required for decryption. Usage: run decrypt <file> --password <pass>"
+                );
             }
         }
     };
@@ -5458,18 +5768,16 @@ pub fn handle_lan(_theme: &ColorfulTheme) -> Result<()> {
     }
 
     devices.sort_by(|a, b| {
-        let a_last = a
-            .ip
-            .split('.')
-            .next_back()
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(0);
-        let b_last = b
-            .ip
-            .split('.')
-            .next_back()
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(0);
+        let a_last =
+            a.ip.split('.')
+                .next_back()
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(0);
+        let b_last =
+            b.ip.split('.')
+                .next_back()
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(0);
         a_last.cmp(&b_last)
     });
 
@@ -5519,12 +5827,7 @@ pub fn handle_lan(_theme: &ColorfulTheme) -> Result<()> {
 // Developer Mock Data Generator (`run mock`, `run fake`, `run dummy`)
 // ============================================================================
 
-pub fn handle_mock(
-    entity: Option<&str>,
-    count: usize,
-    as_csv: bool,
-    copy: bool,
-) -> Result<()> {
+pub fn handle_mock(entity: Option<&str>, count: usize, as_csv: bool, copy: bool) -> Result<()> {
     let mode = entity.unwrap_or("user").to_lowercase();
     let num = count.clamp(1, 100);
 
@@ -5533,12 +5836,33 @@ pub fn handle_mock(
         "Lestari", "Muhammad", "Nadia", "Oki", "Putri", "Rian", "Siti", "Taufik", "Utami", "Wahyu",
     ];
     let last_names = [
-        "Pratama", "Saputra", "Wijaya", "Santoso", "Kusuma", "Hidayat", "Firmansyah", "Lestari",
-        "Nugroho", "Setiawan", "Utomo", "Wibowo", "Gunawan", "Susanto", "Siregar",
+        "Pratama",
+        "Saputra",
+        "Wijaya",
+        "Santoso",
+        "Kusuma",
+        "Hidayat",
+        "Firmansyah",
+        "Lestari",
+        "Nugroho",
+        "Setiawan",
+        "Utomo",
+        "Wibowo",
+        "Gunawan",
+        "Susanto",
+        "Siregar",
     ];
     let cities = [
-        "Jakarta", "Surabaya", "Bandung", "Medan", "Semarang", "Yogyakarta", "Malang", "Denpasar",
-        "Makassar", "Tangerang",
+        "Jakarta",
+        "Surabaya",
+        "Bandung",
+        "Medan",
+        "Semarang",
+        "Yogyakarta",
+        "Malang",
+        "Denpasar",
+        "Makassar",
+        "Tangerang",
     ];
     let roles = [
         "Software Engineer",
@@ -5587,7 +5911,11 @@ pub fn handle_mock(
                     let first = first_names[(i - 1) % first_names.len()];
                     let last = last_names[(i - 1) % last_names.len()];
                     let full_name = format!("{} {}", first, last);
-                    let email = format!("{}.{}@example.com", first.to_lowercase(), last.to_lowercase());
+                    let email = format!(
+                        "{}.{}@example.com",
+                        first.to_lowercase(),
+                        last.to_lowercase()
+                    );
                     let phone = format!(
                         "+62 812-{:04}-{:04}",
                         (i * 137) % 9000 + 1000,
@@ -5630,7 +5958,11 @@ pub fn handle_mock(
                     let first = first_names[(i - 1) % first_names.len()];
                     let last = last_names[(i - 1) % last_names.len()];
                     let full_name = format!("{} {}", first, last);
-                    let email = format!("{}.{}@example.com", first.to_lowercase(), last.to_lowercase());
+                    let email = format!(
+                        "{}.{}@example.com",
+                        first.to_lowercase(),
+                        last.to_lowercase()
+                    );
                     let phone = format!(
                         "+62 812-{:04}-{:04}",
                         (i * 137) % 9000 + 1000,
@@ -5665,4 +5997,3 @@ pub fn handle_mock(
 
     Ok(())
 }
-
