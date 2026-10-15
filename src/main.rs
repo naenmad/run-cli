@@ -2879,6 +2879,7 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
                 "antigravity" | "agy" => return open_in_antigravity(&canonical, is_shell_resolve),
                 "cursor" => return open_in_cursor(&canonical, is_shell_resolve),
                 "vscode" | "code" => return open_in_vscode(&canonical, is_shell_resolve),
+                "zed" => return open_in_zed(&canonical, is_shell_resolve),
                 "xcode" => return open_in_xcode(&canonical, is_shell_resolve),
                 "terminal" | "none" => {
                     if is_shell_resolve {
@@ -2903,6 +2904,7 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
     let ide_options = [
         "Visual Studio Code (code)",
         "Cursor (cursor)",
+        "Zed (zed)",
         "Antigravity IDE (antigravity)",
         "Xcode (xcode)",
         "Switch Terminal Directory Only",
@@ -2927,9 +2929,10 @@ fn handle_project(theme: &ColorfulTheme, target: Option<&str>) -> Result<()> {
     match ide_selection {
         0 => open_in_vscode(&canonical, is_shell_resolve)?,
         1 => open_in_cursor(&canonical, is_shell_resolve)?,
-        2 => open_in_antigravity(&canonical, is_shell_resolve)?,
-        3 => open_in_xcode(&canonical, is_shell_resolve)?,
-        4 => {
+        2 => open_in_zed(&canonical, is_shell_resolve)?,
+        3 => open_in_antigravity(&canonical, is_shell_resolve)?,
+        4 => open_in_xcode(&canonical, is_shell_resolve)?,
+        5 => {
             if is_shell_resolve {
                 println!("{}", canonical.display());
             } else {
@@ -3052,6 +3055,47 @@ fn open_in_cursor(path: &Path, is_shell_resolve: bool) -> Result<()> {
     }
 
     let msg = format!("Opened project in Cursor: {}", path.display());
+    if is_shell_resolve {
+        eprintln!("{}", msg.green());
+    } else {
+        println!("{}", msg.green());
+    }
+    Ok(())
+}
+
+/// Opens project directory in Zed Editor.
+fn open_in_zed(path: &Path, is_shell_resolve: bool) -> Result<()> {
+    let status = Command::new("zed").arg(path).status();
+    let success = match status {
+        Ok(s) => s.success(),
+        Err(_) => false,
+    };
+
+    if !success {
+        let fallback = Command::new("open")
+            .arg("-a")
+            .arg("Zed")
+            .arg(path)
+            .status();
+        let fallback_ok = match fallback {
+            Ok(s) => s.success(),
+            Err(_) => false,
+        };
+
+        if !fallback_ok {
+            let alt_fallback = Command::new("open")
+                .arg("-b")
+                .arg("dev.zed.Zed")
+                .arg(path)
+                .status()
+                .with_context(|| "failed to launch Zed via open -a / -b")?;
+            if !alt_fallback.success() {
+                bail!("failed to launch Zed (ensure Zed is installed in /Applications)");
+            }
+        }
+    }
+
+    let msg = format!("Opened project in Zed: {}", path.display());
     if is_shell_resolve {
         eprintln!("{}", msg.green());
     } else {
@@ -3781,10 +3825,11 @@ fn print_command_detail(cmd: &str) {
             println!("{}", electric_blue("IDE / ACTION MENU:").bold());
             println!("  1. Visual Studio Code (code)");
             println!("  2. Cursor (cursor)");
-            println!("  3. Antigravity IDE (antigravity)");
-            println!("  4. Xcode (xcode - opens .xcworkspace/.xcodeproj if present)");
-            println!("  5. Switch Terminal Directory Only (switches active terminal directory)");
-            println!("  6. Cancel");
+            println!("  3. Zed (zed)");
+            println!("  4. Antigravity IDE (antigravity)");
+            println!("  5. Xcode (xcode - opens .xcworkspace/.xcodeproj if present)");
+            println!("  6. Switch Terminal Directory Only (switches active terminal directory)");
+            println!("  7. Cancel");
         }
         "dev" => {
             println!("{} dev", electric_blue("COMMAND:").bold());

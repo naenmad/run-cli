@@ -14,7 +14,7 @@ pub struct RunConfig {
     pub auto_clear: Option<bool>,
     /// Compact mode: sleek minimalist layout without large ASCII banners
     pub compact_mode: Option<bool>,
-    /// Preferred default editor: "antigravity", "cursor", "vscode", "xcode", "terminal", or "ask"
+    /// Preferred default editor: "antigravity", "cursor", "vscode", "zed", "xcode", "terminal", or "ask"
     pub default_ide: Option<String>,
     /// Default search engine: "google" (default), "duckduckgo", "brave", "bing", "kagi", "perplexity"
     pub search_engine: Option<String>,
@@ -61,7 +61,7 @@ auto_clear = false
 compact_mode = false
 
 # Default editor to open projects directly without prompting:
-# Options: "antigravity", "cursor", "vscode", "xcode", "terminal", "ask" (default)
+# Options: "antigravity", "cursor", "vscode", "zed", "xcode", "terminal", "ask" (default)
 default_ide = "ask"
 
 # Default web search engine for `run browse` / `run web`:

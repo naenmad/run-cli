@@ -2726,6 +2726,7 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
                 "Antigravity IDE (antigravity)",
                 "Cursor (cursor)",
                 "Visual Studio Code (vscode)",
+                "Zed (zed)",
                 "Xcode (xcode)",
                 "Switch Terminal Directory Only (terminal)",
                 "Ask every time (ask - default)",
@@ -2743,9 +2744,10 @@ fn manage_config_interactive(theme: &ColorfulTheme) -> Result<()> {
                 0 => new_cfg.default_ide = Some("antigravity".to_string()),
                 1 => new_cfg.default_ide = Some("cursor".to_string()),
                 2 => new_cfg.default_ide = Some("vscode".to_string()),
-                3 => new_cfg.default_ide = Some("xcode".to_string()),
-                4 => new_cfg.default_ide = Some("terminal".to_string()),
-                5 => new_cfg.default_ide = Some("ask".to_string()),
+                3 => new_cfg.default_ide = Some("zed".to_string()),
+                4 => new_cfg.default_ide = Some("xcode".to_string()),
+                5 => new_cfg.default_ide = Some("terminal".to_string()),
+                6 => new_cfg.default_ide = Some("ask".to_string()),
                 _ => {
                     println!("Cancelled.");
                     return Ok(());

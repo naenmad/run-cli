@@ -760,7 +760,7 @@ auto_clear = false
 compact_mode = false
 
 # Default editor to open projects directly without prompting:
-# Options: "antigravity", "cursor", "vscode", "xcode", "terminal", "ask" (default)
+# Options: "antigravity", "cursor", "vscode", "zed", "xcode", "terminal", "ask" (default)
 default_ide = "ask"
 
 # Additional custom directory hubs to scan for projects in `run project`:
